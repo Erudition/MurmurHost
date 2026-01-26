@@ -24,12 +24,10 @@ WORKDIR /bots
 # Copy scripts and directories
 COPY echobot.py .
 COPY opus_recorder.py .
+COPY Murmur.ice .
 COPY startup.sh .
 COPY mumo ./mumo
-COPY mumble-bot-config.yml .
-COPY mumble-bot ./mumble-bot
 COPY mumblerecbot ./mumblerecbot
-COPY sounds ./sounds
 
 # Make startup script executable
 RUN chmod +x startup.sh

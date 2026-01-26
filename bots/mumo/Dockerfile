@@ -1,6 +1,6 @@
-FROM python:3
+FROM python:3.10
 
-RUN pip install --no-cache-dir zeroc-ice
+RUN pip install --no-cache-dir "zeroc-ice<3.8" python-daemon
 
 COPY entrypoint.sh /entrypoint.sh
 COPY . /mumo
@@ -13,4 +13,4 @@ VOLUME ["/data"]
 WORKDIR /mumo
 ENTRYPOINT [ "/entrypoint.sh" ]
 
-CMD ["/mumo/mumo.py", "--ini", "/data/mumo.ini"]
+CMD ["/mumo/mumo.py", "-a", "--ini", "/data/mumo.ini"]

@@ -490,6 +490,9 @@ class CustomLogger(Ice.Logger):
     def _print(self, message):
         self._log.info(message)
 
+    def print(self, message):
+        self._log.info(message)
+
     def trace(self, category, message):
         self._log.debug('Trace %s: %s', category, message)
 
@@ -498,6 +501,16 @@ class CustomLogger(Ice.Logger):
 
     def error(self, message):
         self._log.error(message)
+
+    def cloneWithPrefix(self, prefix):
+        return self
+
+    def getPrefix(self):
+        return ""
+        return self
+
+    def getPrefix(self):
+        return ""
 
 
 #
