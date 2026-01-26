@@ -1,0 +1,16 @@
+{
+  "name": "tts-web-interface",
+  "version": "1.0.0",
+  "description": "Unified TTS Web Interface for Piper, Silero, and Chatterbox TTS",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}
+

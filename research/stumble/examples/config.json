@@ -1,0 +1,53 @@
+{
+  "operator": "!",
+  "mumble": {
+    "server": "127.0.0.1",
+    "port": 64738,
+    "username": "StumbleBot",
+    "password": "",
+    "key": "",
+    "cert": ""
+  },
+  "extensions": {
+    "audio": {
+      "gain": 0.5,
+      "directory": "",
+    },
+    "audioplayer": {
+      "operator": "@",
+      "maxqueue": 5,
+      "autoplay": true,
+      "delay": 300
+    },
+    "audiostream": {
+      "maxsize": 2000000
+    },
+    "database": {
+      "location": ""
+    },
+    "info": true,
+    "io": {
+      "operator": "#"
+    },
+    "log": {
+      "directory": ""
+    },
+    "messenger": {
+      "textmessagelength": 5000
+    },
+    "movement": {
+      "afk": "AFK Channel",
+      "home": "Bot Channel"
+    },
+    "parser": true,
+    "system": true,
+    "time": true,
+    "usersystem": true,
+    "util": true,
+    "permissions": {
+      "maxlevel": 100,
+      "superuser": "Alice",
+      "warningtime": 30000
+    }
+  }
+}

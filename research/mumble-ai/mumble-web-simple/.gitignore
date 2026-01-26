@@ -1,0 +1,68 @@
+# ============================================================
+# Build & Distribution
+# ============================================================
+dist/
+build/
+lib-cov/
+analyze-stats.json
+
+# ============================================================
+# Logs & Runtime
+# ============================================================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.pid
+*.seed
+*.pid.lock
+.node_repl_history
+
+# ============================================================
+# Coverage & Testing
+# ============================================================
+coverage/
+.nyc_output/
+.grunt/
+.eslintcache
+*.tsbuildinfo
+
+# ============================================================
+# Node.js Dependencies
+# ============================================================
+node_modules/
+vendors/*/node_modules/
+jspm_packages/
+# npm cache (lokal, nicht committen)
+.npm/
+# Yarn
+.yarn-integrity
+# Output of 'npm pack'
+*.tgz
+
+# ============================================================
+# VS Code / Devcontainers
+# ============================================================
+.vscode/
+.vscode-server/
+.vscode-remote/
+.devcontainer/*Marker
+.devcontainer/murmur_config/
+.devcontainer/murmur_data/
+.cache/
+.dotnet/
+
+# ============================================================
+# IDE & System
+# ============================================================
+.idea/
+.idea/modules.xml
+.idea/inspectionProfiles/profiles_settings.xml
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.bash_history
+.docker

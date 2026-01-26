@@ -1,0 +1,441 @@
+<html>
+  <head>
+    <title>
+      JJMumbleBot Quick Setup Utility - Web Interface (MASTER BRANCH)
+    </title>
+
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="../css/content-pages.css" crossorigin="anonymous">
+    <style>
+      .container {
+          padding: 15px;
+          background: #1E2021;
+      }
+      body {
+          color: rgb(218, 215, 210);
+          background: rgb(24, 26, 27);
+      }
+      h1, h2, h3, h4, h5, h6 {
+        text-align: center;
+        color: white;
+      }
+      a {
+        color: white;
+        text-decoration: none;
+      }
+      a:hover {
+        color: #e83e8c;
+      }
+      .footer {
+          position: fixed;
+          bottom: 0;
+          width: 100%;
+          line-height: 60px;
+          background: black;
+          text-align: center;
+          display:block;
+      }
+      .alert {
+        margin-bottom: 0px;
+        padding: 0px;
+      }
+      /* https://www.w3schools.com/howto/howto_css_custom_scrollbar.asp */
+      /* width */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      /* Track */
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+
+      /* Handle */
+      ::-webkit-scrollbar-thumb {
+        background: #888;
+      }
+
+      /* Handle on hover */
+      ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h3 id=title-id>JJMumbleBot - Quick Setup Utility</h3>
+      <p style="text-align:center">
+          JJMumbleBot License: <a style="color:white" href="https://github.com/DuckBoss/JJMumbleBot/blob/master/LICENSE">GPL-3.0</a><br>
+          Bootstrap theme provided by: <a style="color:white" href="https://github.com/thomaspark/bootswatch">Bootswatch</a> - <a style="color:white" href="https://github.com/thomaspark/bootswatch/blob/v4/LICENSE">MIT License</a>
+
+    </div>
+    <hr>
+    <div class='container'>
+      <h3>Connection Settings</h3>
+
+      <div class='container text-white rounded'>
+        Enter your bot username here, If the bot is registered with a certificate, the name must match the name in the certificate.<br/>
+        <label><h6>User ID:</h6></label>
+        <b>[Example: JJMumbleBot]</b>
+        <input type="text" id="server-user" name='server-user-input' class='required form-control border border-danger' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enter the file path to your certificate. If your server doesn't require a certificate, leave this blank.<br/>
+        <label><h6>Server Certificate File Path:</h6></label>
+        <b>[Example: /path/to/my/cert.pem]</b>
+        <input type="text" id="server-cert" name='server-cert-input' class='form-control' size='100'>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enable/Disable auto-reconnection to the server if connection is lost.<br/>
+        <input type="checkbox" id="server-reconnect" name='server-reconnect-input' class='required border border-danger' required>
+        <label><h6>Auto-Reconnect</h6></label>
+        <b>[Default: Unchecked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        Specify the default channel the bot should join when it connects to the server.<br/>
+        <label><h6>Default Channel:</h6></label>
+        <b>[Example: Root]</b>
+        <input type="text" id="server-default-channel" name='server-default-channel-input' value='Root' class='required form-control border border-danger' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enter the bot owner's display name here. The bot must have at least 1 super user to be able to control all bot commands.<br/>
+        <label><h6>Default Super User:</h6></label>
+        <b>[Example: SuperUserJason]</b>
+        <input type="text" id="server-superuser" name='server-default-superuser-input' class='required form-control border border-danger' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enable self registering if you want the bot to attempt to self-register to the server.<br/>
+        <input type="checkbox" id="main-settings-self-register" name='main-settings-self-register-input' class='required border border-danger' required>
+        <label><h6>Self-Register</h6></label>
+        <b>[Default: Unchecked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        The default comment associated with the bot that is shown to users when they view the bot's comment. This can be left blank.<br/>
+        <label><h6>Default User Comment:</h6></label>
+        <b>[Example: Hello! This is JJMumbleBot!]</b>
+        <input type="text" id="server-comment" name='server-default-comment-input' class="form-control" size='100'>
+      </div>
+    </div>
+
+    <div class='container'>
+      <h3>Media Settings</h3>
+
+      <div class='container text-white rounded'>
+        The file path to FFMPEG.<br/>
+        <label><h6>FFMPEG Path:</h6></label>
+        <b>[Example: path/to/ffmpeg]</b>
+        <input type="text" id="media-ffmpeg-path" name='media-ffmpeg-path-input' class='required form-control border border-danger' size='100' value="ffmpeg" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        The file path to VLC.<br/>
+        <label><h6>VLC Path:</h6></label>
+        <b>[Example: path/to/vlc]</b>
+        <input type="text" id="media-vlc-path" name='media-vlc-path-input' class='required form-control border border-danger' size='100' value="vlc" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        To enable stereo audio for the bot, check the box. Uncheck the box for mono audio.<br/>
+        <input type="checkbox" id="media-stereo-enable" name='media-stereo-enable-input' class='required' checked required>
+        <label><h6>Enable Stereo Audio</h6></label>
+        <b>[Default: Checked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enable/Disable Audio Library Console Messages<br/>
+        <input type="checkbox" id="media-quiet-enable" name='media-quiet-enable-input' class='required' checked required>
+        <label><h6>Enable Audio Library Quiet Mode</h6></label>
+        <b>[Default: Checked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        The default volume when the bot starts.<br/>
+        <label><h6>Default Volume:</h6></label>
+        <b>[Default: 0.3]</b>
+        <input type="number" id="media-default-volume" name='media-default-volume-input' class='required form-control border border-danger' size='100' value="0.3" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enable Audio Ducking (off by default, use !duckaudio to toggle on and off)<br/>
+        <input type="checkbox" id="media-duck-audio-enable" name='media-duck-audio-input' class='required' required>
+        <label><h6>Enable Audio Ducking</h6></label>
+        <b>[Default: Unchecked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        The default audio ducking volume (How low the volume will drop down when ducking)<br/>
+        <label><h6>Audio Ducking Volume:</h6></label>
+        <b>[Default: 0.05]</b>
+        <input type="number" id="media-ducking-volume" name='media-ducking-volume-input' class='required form-control border border-danger' size='100' value="0.05" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        The default threshold before audio is ducked.<br/>
+        <label><h6>Audio Ducking Threshold:</h6></label>
+        <b>[Default: 2500.0]</b>
+        <input type="number" id="media-ducking-threshold" name='media-ducking-threshold-input' class='required form-control border border-danger' size='100' value="2500.0" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        The default delay before the audio ducking reacts to user voices.<br/>
+        <label><h6>Audio Ducking Delay:</h6></label>
+        <b>[Default: 1.0]</b>
+        <input type="number" id="media-ducking-delay" name='media-ducking-delay-input' class='required form-control border border-danger' size='100' value="1.0" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        The default maximum queue length for the audio interface.<br/>
+        <label><h6>Audio Max Queue Length:</h6></label>
+        <b>[Default: 50]</b>
+        <input type="number" id="media-max-queue-length" name='media-max-queue-length-input' class='required form-control border border-danger' size='100' value="50" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Optional Proxy URL - If you want to use a proxy server to use the youtube-dl library, fill this out.<br/>
+        <label><h6>YoutubeDL Proxy URL:</h6></label>
+        <b>[Example: socks5://myproxy:8080, https://myproxy:8080]</b>
+        <input type="text" id="media-proxy-url" name='media-proxy-url-input' class='required form-control' size='100'>
+      </div>
+
+      <div class='container text-white rounded'>
+        Optionally use a cookies.txt file for the youtube-dl library (useful to deal with rate limits).<br/>
+        <label><h6>YoutubeDL Cookie.txt Path:</h6></label>
+        <b>[Example: path/to/cookies.txt]</b>
+        <input type="text" id="media-cookies-path" name='media-cookies-path-input' class='required form-control' size='100'>
+      </div>
+
+      <div class='container text-white rounded'>
+        Temporary media directory to store youtube thumbnails and other images content. This directory is cleared when the bot exits.<br/>
+        <label><h6>Temporary Media Directory Path:</h6></label>
+        <b>[Example: path/to/temp_media_dir]</b>
+        <input type="text" id="media-temp-path" name='media-temp-path-input' class='required form-control border border-danger' size='100' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Permanent media directory to store sound board clips, and other media that won't be deleted when the bot exits.<br/>
+        <label><h6>Permanent Media Directory Path:</h6></label>
+        <b>[Example: path/to/perm_media_dir]</b>
+        <input type="text" id="media-perm-path" name='media-perm-path-input ' class='required form-control border border-danger' size='100' required>
+      </div>
+    </div>
+    <div class='container'>
+      <h3>Logging</h3>
+
+      <div class='container text-white rounded'>
+        To enable logging for the bot, check the box. Uncheck the box to disable.<br/>
+        <input type="checkbox" id="logging-enable" name='logging-enable-input' class='required' required>
+        <label><h6>Enable Logging</h6></label>
+        <b>[Default: Unchecked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        This sets the maximum number of logs the bot can have at a time before it overwrites the oldest one.<br/>
+        <label><h6>Maximum number of Logs:</h6></label>
+        <b>[Recommended: 5-20]</b>
+        <input type="number" id="logging-max-logs" name='logging-max-logs-input' class='required form-control border border-danger' value=20 required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Maximum size per log (in Bytes).<br/>
+        <label><h6>Maximum log file size in bytes:</h6></label>
+        <b>[Recommended: 1500000 (1.5 MB)]</b>
+        <input type="number" id="logging-max-log-size" name='logging-max-log-size-input' class='required form-control border border-danger' value=1500000 required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enable/Disable channel message logging (Enabling it will hide message logs to: Message Received: [User -> #####])<br/>
+        <input type="checkbox" id="logging-hide-message-enable" name='logging-message-input' class='required' checked required>
+        <label><h6>Hide Message Logging</h6></label>
+        <b>[Default: Checked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        This is the path to directory where logs are stored. All bot logs will be stored in this directory.<br/>
+        <b>[Example: my/path/to/logs]</b>
+        <label><h6>Log Directory Path:</h6></label>
+        <input type="text" id="logging-path" name='logging-path-input' class='required form-control border border-danger' size='100' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enable/Disable Stack Trace Logging. This will create large log files and log the stack trace of each logging event.<br/>
+        <input type="checkbox" id="logging-stack-trace" name='logging-stack-trace-input' class='required' required>
+        <label><h6>Enable Log Stack Trace</h6></label>
+        <b>[Default: Unchecked]</b>
+      </div>
+    </div>
+    <div class='container'>
+      <h3>Plugin Settings</h3>
+
+      <div class='container text-white rounded'>
+        Disables plugins that are included in this list for regular operation. You can leave the list empty.Type the name of the plugins in quotes separated by commas.<br/>
+        <label><h6>Disabled Plugins:</h6></label>
+        <b>[Example: "youtube", "sound_board"]</b>
+        <input type="text" id="plugins-disabled" name='plugins-disabled-input' class='form-control' size='100'>
+      </div>
+
+      <div class='container text-white rounded'>
+        The list of plugins that are available during safe-mode operation of the bot.Type the name of the plugins separated by commas.<br/>
+        <label><h6>Safe-Mode Plugins:</h6></label>
+        <b>[Example: "core_commands", "bot_commands"]</b>
+        <input type="text" id="plugins-safe" name='plugins-safe-input' class='required form-control' value='"core_commands", "bot_commands"' size='100' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        The root channels in which the creation of temporary channels are allowed.Change this list to include the channels in your server that you allow the bot to create temporary channels in.Type the name of the plugins separated by commas.<br/>
+        <label><h6>Allowed Root Channels:</h6></label>
+        <b>[Example: "Root", "MyChannel", "MyChannel2"]</b>
+        <input type="text" id="allowed-root" name='allowed-root-input' class='required form-control' value='"Root"' size='100' required>
+      </div>
+    </div>
+    <div class='container'>
+      <h3>Main Settings</h3>
+      <div class='container text-white rounded'>
+
+          Enable or disable version/plugin integrity checking for the database.<br/>
+          Disabling this may cause database conflicts after code updates, plugin updates, or plugin addition/removal!<br/>
+
+        <input type="checkbox" id="main-settings-db-integrity" name='main-settings-db-integrity-input' class='required' checked required>
+        <label for='main-settings-db-integrity'><h6>Enable Database Integrity Check</h6></label>
+        <b>[Default: Checked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        Enable automatic internal database backups by checking the box, or disable by unchecking it.<br/>
+        <input type="checkbox" id="main-settings-db-backups" name='main-settings-db-backups-input' class='required' checked required>
+        <label for='main-settings-db-backups'><h6>Enable Internal Database Backups</h6></label>
+        <b>[Default: Unchecked]</b>
+      </div>
+
+      <div class='container text-white rounded'>
+        The execution tick rate of commands in the command queue [Must be an integer/float]<br/>
+        <label><h6>Command Tick Rate:</h6></label>
+        <b>[Recommended: 0.1]</b>
+        <input type="number" id="main-settings-cmd-tick-rate" name='main-settings-cmd-tick-rate-input' class='required form-control border border-danger' value='0.1' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Maximum commands in a multi-command input (this includes multi-commands in aliases) [Must be an integer]This determines the number of commands that can be inputted in a single line<br/>
+        <label><h6>Multi-Command Limit:</h6></label>
+        <b>[Recommended: 200]</b>
+        <input type="number" id="main-settings-cmd-limit" name='main-settings-cmd-limit-input' class='required form-control border border-danger' value='200' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Maximum commands per queue (this includes commands in aliases) [Must be an integer]This determines the maximum number of commands that the bot can process in it's queue.<br/>
+        <label><h6>Command Queue Limit:</h6></label>
+        <b>[Recommended: 600]</b>
+        <input type="number" id="main-settings-cmd-queue-limit" name='main-settings-cmd-queue-limit-input' class='required form-control border border-danger' value='600' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        The command token to identify commands in the chat [Must be a single character]<br/>
+        <label><h6>Command Token:</h6></label>
+        <b>[Example: !, ~, $]</b>
+        <input type="text" id="main-settings-cmd-token" name='main-settings-cmd-token-input' class='required form-control border border-danger' value='!' maxlength='1' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        The number of commands to store in the command history tracker [Must be an integer]<br/>
+        <label><h6>Command History Limit:</h6></label>
+        <b>[Default: 25]</b>
+        <input type="number" id="main-settings-cmd-hist-limit" name='main-settings-cmd-hist-limit-input' class='required form-control border border-danger' value='25' required>
+      </div>
+    </div>
+    <div class='container'>
+      <h3>PGUI Settings</h3>
+
+      <div class='container text-white rounded'>
+        <p align="center">
+          Determines the default background color of the UI canvas.<br/>
+          Refer to the following for more information on the limitations:<br/>
+          <h6><a href="https://doc.qt.io/qt-5/richtext-html-subset.html">Qt5 Html Subset</a></h6><br/>
+          <h6><a href="https://doc.qt.io/qt-5/qcolor.html#setNamedColor">Qt5 Named Colors</a></h6></p>
+
+        <label><h6>GUI Default Background Color:</h6></label>
+        <b>[Default: black]</b>
+        <input type="text" id="pgui-canvas-bg-color" name='pgui-canvas-bg-color-input' class='required form-control border border-danger' value='black' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default background color of images in the UI canvas.<br/>
+        <label><h6>GUI Default Image Background Color:</h6></label>
+        <b>[Default: black]</b>
+        <input type="text" id="pgui-canvas-img-bg-color" name='pgui-canvas-img-bg-color-input' class='required form-control border border-danger' value='black' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default canvas alignment using html alignment tags<br/>
+        <label><h6>GUI Default Alignment:</h6></label>
+        <b>[Example: center, left, right | Default: center]</b>
+        <input type="text" id="pgui-canvas-align" name='pgui-canvas-align-input' class='required form-control border border-danger' value='center' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default canvas border size<br/>
+        <label><h6>GUI Canvas Border:</h6></label>
+        <b>[Default: 0]</b>
+        <input type="number" id="pgui-canvas-border-size" name='pgui-canvas-border-size-input' class='required form-control border border-danger' value='0' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default canvas text color<br/>
+        <label><h6>GUI Default Text Color:</h6></label>
+        <b>[Example: white, red, blue, (qt5 html subset colors) | Default: Snow]</b>
+        <input type="text" id="pgui-canvas-color" name='pgui-canvas-color-input' class='required form-control border border-danger' value='white' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default canvas text font<br/>
+        <label><h6>GUI Default Font:</h6></label>
+        <b>[Default: Calibri]</b>
+        <input type="text" id="pgui-canvas-default-font" name='pgui-canvas-default-font-input' class='required form-control border border-danger' value="Calibri" required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default header text color<br/>
+        <label><h6>GUI Default Header Text Color:</h6></label>
+        <b>[Example: white, red, blue, (qt5 html subset colors) | Default: red]</b>
+        <input type="text" id="pgui-canvas-header-color" name='pgui-canvas-header-color-input' class='required form-control border border-danger' value='red' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default index text color<br/>
+        <label><h6>GUI Default Index Text Color:</h6></label>
+        <b>[Example: white, red, blue, (qt5 html subset colors) | Default: cyan]</b>
+        <input type="text" id="pgui-canvas-index-color" name='pgui-canvas-index-color-input' class='required form-control border border-danger' value='cyan' required>
+      </div>
+
+      <div class='container text-white rounded'>
+        Determines the default sub-header text color<br/>
+        <label><h6>GUI Default Sub-Header Text Color:</h6></label>
+        <b>[Example: white, red, blue, (qt5 html subset colors) | Default: yellow]</b>
+        <input type="text" id="pgui-canvas-subheader-color" name='pgui-canvas-subheader-color-input' class='required form-control border border-danger' value='yellow' required>
+      </div>
+    </div>
+  <hr>
+
+  <footer class="footer">
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      Some required fields are empty! Please make sure that all fields marked with a red outline are filled.
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close" onclick="$('.alert').hide()">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+    <div id='generate-ini-file'>
+      <button onclick="get_all_data()" class="generate_button btn btn-primary btn-block btn-danger">Download Config.ini File</button>
+    </div>
+  </footer>
+  <script src="../../js/qsu/main.js"></script>
+  <script>
+    $('.alert').hide();
+  </script>
+  </body>
+</html>

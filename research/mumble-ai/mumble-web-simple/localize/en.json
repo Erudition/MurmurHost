@@ -1,0 +1,73 @@
+{
+  "connectdialog": {
+    "title": "Join audio conference",
+    "username": "Username",
+    "password": "Password",
+    "microphone": "Microphone",
+    "headphones": "Please use \uD83C\uDFA7. Thank you.",
+    "connect": "Connect",
+    "error": {
+      "title": "Failed to connect",
+      "reason": {
+        "refused": "The connection has been refused.",
+        "version": "The server uses an incompatible version.",
+        "username": "Your user name was rejected. Maybe try a different one?",
+        "userpassword": "The given password is incorrect.\nThe user name you have chosen requires a special one.",
+        "serverpassword": "The given password is incorrect.",
+        "username_in_use": "The user name you have chosen is already in use.",
+        "full": "The server is full.",
+        "clientcert": "The server requires you to provide a client certificate which is not supported by this web application.",
+        "server": "The server reports:"
+      },
+      "retry": "Retry",
+      "cancel": "Cancel"
+    }
+  },
+  "connectinfo": {
+    "title": "Audio transmission info",
+    "server": "Audio server details",
+    "webapp": "Statistics for this web app",
+    "native": "Desktop client / mobile app"
+  },
+  "settingsdialog": {
+    "title": "Audio settings",
+    "transmission": "Transmission",
+    "cont": "Continuous",
+    "ptt": "Push To Talk",
+    "ptt_key": "PTT Key",
+    "audio_quality": "Audio Quality",
+    "packet": "Audio per packet",
+    "close": "Cancel",
+    "submit": "Apply"
+  },
+  "chat": {
+    "channel_message_placeholder": "Type message to everyone here...",
+    "user_message_placeholder": "Type message to user '%1' here..."
+  },
+  "logentry": {
+    "mic_init_error": "Microphone initialization error",
+    "connecting": "Connecting to audio server",
+    "connected": "Connected to audio server",
+    "connection_error": "Connection error",
+    "unknown_voice_mode": "Unknown voice mode"
+  },
+  "audio": {
+    "sample_rate": {
+      "warning": {
+        "title": "Audio hardware mismatch",
+        "body": "Your audio device sample rate (%1 Hz) doesn't match the required 48000 Hz. You can still join without audio, but your microphone and speakers will remain muted.",
+        "info": "Audio is disabled because your audio device sample rate (%1 Hz) doesn't match the required 48000 Hz.",
+        "accept": "Join without audio",
+        "cancel": "Cancel",
+        "close": "Close",
+        "unknown_rate": "unknown",
+        "hints_title": "How to switch your device to 48 kHz",
+        "hints": {
+          "item1": "Windows: Right-click the speaker icon → Sound settings → More sound settings → select your device → Advanced → set Default Format to 48,000 Hz.",
+          "item2": "macOS: Open Applications › Utilities › Audio MIDI Setup → select your device → set Format to 48,000 Hz.",
+          "item3": "Linux: Use PulseAudio Volume Control (pavucontrol) or system audio settings to choose a 48 kHz profile, then reconnect."
+        }
+      }
+    }
+  }
+}

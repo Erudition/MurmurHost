@@ -1,0 +1,9 @@
+# Required core dependencies -
+fuzzywuzzy
+python-Levenshtein
+beautifulsoup4
+requests
+Pillow
+yt-dlp
+# pymumble==1.6.1
+pymumble @ git+https://github.com/DuckBoss/pymumble@main

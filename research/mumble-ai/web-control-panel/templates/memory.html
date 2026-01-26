@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory System Dashboard - Mumble AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: white;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-healthy {
+            background-color: #4CAF50;
+        }
+
+        .status-error {
+            background-color: #f44336;
+        }
+
+        .status-unknown {
+            background-color: #ff9800;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: #666;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .search-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            border-color: #667eea;
+        }
+
+        .search-btn {
+            padding: 12px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s ease;
+        }
+
+        .search-btn:hover {
+            background: #5a6fd8;
+        }
+
+        .results {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-item h4 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .result-item p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .result-meta {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .entity-type {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #667eea;
+            color: white;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            color: #f44336;
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 8px 15px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .pagination button:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Memory System Dashboard</h1>
+            <div class="nav-links">
+                <a href="/" class="nav-link">← Back to Control Panel</a>
+                <a href="/logs" class="nav-link">View Logs</a>
+            </div>
+        </div>
+
+        <!-- System Status Dashboard -->
+        <div class="dashboard" id="statusDashboard">
+            <div class="card">
+                <h3>Redis Cache</h3>
+                <div id="redisStatus">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>ChromaDB Vector Store</h3>
+                <div id="chromadbStatus">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>PostgreSQL Database</h3>
+                <div id="postgresqlStatus">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Entity Intelligence</h3>
+                <div id="entityStatus">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Memory Consolidation</h3>
+                <div id="consolidationStatus">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <h3>🔍 Memory Search</h3>
+            <div class="search-form">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search conversations and entities...">
+                <button onclick="performSearch()" class="search-btn">Search</button>
+            </div>
+            <div id="searchResults" class="results"></div>
+        </div>
+
+        <!-- Detailed Views -->
+        <div class="card">
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('entities')">Entity Mentions</button>
+                <button class="tab" onclick="showTab('consolidation')">Consolidation History</button>
+                <button class="tab" onclick="showTab('memories')">Persistent Memories</button>
+            </div>
+
+            <div id="entitiesTab" class="tab-content active">
+                <h3>Recent Entity Mentions</h3>
+                <div id="entitiesList">
+                    <div class="loading">Loading entities...</div>
+                </div>
+                <div id="entitiesPagination" class="pagination"></div>
+            </div>
+
+            <div id="consolidationTab" class="tab-content">
+                <h3>Memory Consolidation History</h3>
+                <div id="consolidationList">
+                    <div class="loading">Loading consolidation data...</div>
+                </div>
+            </div>
+
+            <div id="memoriesTab" class="tab-content">
+                <h3>🧠 Persistent Memories</h3>
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                    <select id="user-filter" onchange="loadMemories()" style="padding: 8px; flex: 1;">
+                        <option value="">All Users</option>
+                    </select>
+                    <select id="category-filter" onchange="loadMemories()" style="padding: 8px; flex: 1;">
+                        <option value="">All Categories</option>
+                        <option value="schedule">📅 Schedule</option>
+                        <option value="fact">💡 Fact</option>
+                        <option value="task">✓ Task</option>
+                        <option value="preference">❤️ Preference</option>
+                        <option value="reminder">⏰ Reminder</option>
+                        <option value="other">📌 Other</option>
+                    </select>
+                    <button onclick="loadMemories()" class="search-btn" style="padding: 8px 20px;">Refresh</button>
+                    <button onclick="showAddMemoryForm()" class="search-btn" style="padding: 8px 20px;">+ Add Memory</button>
+                </div>
+
+                <div id="add-memory-form" style="display: none; background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin-bottom: 10px;">Add New Memory</h4>
+                    <input type="text" id="new-memory-user" placeholder="User Name" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 5px;">
+                    <select id="new-memory-category" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 5px;">
+                        <option value="schedule">📅 Schedule</option>
+                        <option value="fact">💡 Fact</option>
+                        <option value="task">✓ Task</option>
+                        <option value="preference">❤️ Preference</option>
+                        <option value="reminder">⏰ Reminder</option>
+                        <option value="other">📌 Other</option>
+                    </select>
+                    <textarea id="new-memory-content" placeholder="Memory content" style="width: 100%; padding: 8px; margin-bottom: 10px; min-height: 80px; border: 2px solid #ddd; border-radius: 5px;"></textarea>
+                    <input type="number" id="new-memory-importance" placeholder="Importance (1-10)" min="1" max="10" value="5" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 2px solid #ddd; border-radius: 5px;">
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="addMemory()" class="search-btn">Save Memory</button>
+                        <button onclick="cancelAddMemory()" style="background: #95a5a6; color: white; border: none; padding: 12px 25px; border-radius: 25px; cursor: pointer;">Cancel</button>
+                    </div>
+                </div>
+
+                <div id="memories-list" style="max-height: 500px; overflow-y: auto;">
+                    <p class="loading">Loading memories...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        const perPage = 20;
+
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMemoryStatus();
+            loadEntities();
+            loadConsolidation();
+            loadUsers();
+            loadMemories();
+        });
+
+        // Load memory system status
+        async function loadMemoryStatus() {
+            try {
+                const response = await fetch('/api/memory/status');
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateStatusCard('redisStatus', data.data.redis, 'Redis Cache');
+                    updateStatusCard('chromadbStatus', data.data.chromadb, 'ChromaDB Vector Store');
+                    updateStatusCard('postgresqlStatus', data.data.postgresql, 'PostgreSQL Database');
+                    updateEntityStatus(data.data.entities);
+                    updateConsolidationStatus(data.data.consolidation);
+                } else {
+                    showError('redisStatus', 'Failed to load memory status');
+                }
+            } catch (error) {
+                showError('redisStatus', 'Error loading memory status: ' + error.message);
+            }
+        }
+
+        // Update status card
+        function updateStatusCard(elementId, status, title) {
+            const element = document.getElementById(elementId);
+            const statusClass = status.status === 'healthy' ? 'status-healthy' : 
+                              status.status === 'error' ? 'status-error' : 'status-unknown';
+            
+            let html = `<span class="status-indicator ${statusClass}"></span>${status.status.toUpperCase()}`;
+            
+            if (status.info && Object.keys(status.info).length > 0) {
+                html += '<div style="margin-top: 15px;">';
+                for (const [key, value] of Object.entries(status.info)) {
+                    html += `<div class="metric">
+                        <span class="metric-label">${key.replace(/_/g, ' ').toUpperCase()}</span>
+                        <span class="metric-value">${value}</span>
+                    </div>`;
+                }
+                html += '</div>';
+            }
+            
+            if (status.error) {
+                html += `<div class="error">Error: ${status.error}</div>`;
+            }
+            
+            element.innerHTML = html;
+        }
+
+        // Update entity status
+        function updateEntityStatus(entities) {
+            const element = document.getElementById('entityStatus');
+            let html = `<div class="metric">
+                <span class="metric-label">Total Entities</span>
+                <span class="metric-value">${entities.count || 0}</span>
+            </div>`;
+            
+            if (entities.recent && entities.recent.length > 0) {
+                html += '<div style="margin-top: 10px;"><strong>Recent:</strong></div>';
+                entities.recent.forEach(entity => {
+                    html += `<div class="metric">
+                        <span class="metric-label">${entity.text}</span>
+                        <span class="metric-value">${entity.type}</span>
+                    </div>`;
+                });
+            }
+            
+            element.innerHTML = html;
+        }
+
+        // Update consolidation status
+        function updateConsolidationStatus(consolidation) {
+            const element = document.getElementById('consolidationStatus');
+            let html = '';
+            
+            if (consolidation.last_run) {
+                html += `<div class="metric">
+                    <span class="metric-label">Last Run</span>
+                    <span class="metric-value">${new Date(consolidation.last_run).toLocaleString()}</span>
+                </div>`;
+                
+                if (consolidation.stats) {
+                    html += `<div class="metric">
+                        <span class="metric-label">Messages Consolidated</span>
+                        <span class="metric-value">${consolidation.stats.messages_consolidated || 0}</span>
+                    </div>`;
+                    html += `<div class="metric">
+                        <span class="metric-label">Summaries Created</span>
+                        <span class="metric-value">${consolidation.stats.summaries_created || 0}</span>
+                    </div>`;
+                    html += `<div class="metric">
+                        <span class="metric-label">Tokens Saved</span>
+                        <span class="metric-value">${consolidation.stats.tokens_saved || 0}</span>
+                    </div>`;
+                }
+            } else {
+                html = '<div class="metric"><span class="metric-label">No consolidation runs yet</span></div>';
+            }
+            
+            element.innerHTML = html;
+        }
+
+        // Load entities
+        async function loadEntities(page = 1) {
+            try {
+                const response = await fetch(`/api/memory/entities?page=${page}&per_page=${perPage}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayEntities(data.data.entities);
+                    updatePagination(data.data.pagination, 'entitiesPagination', loadEntities);
+                } else {
+                    showError('entitiesList', 'Failed to load entities');
+                }
+            } catch (error) {
+                showError('entitiesList', 'Error loading entities: ' + error.message);
+            }
+        }
+
+        // Display entities
+        function displayEntities(entities) {
+            const element = document.getElementById('entitiesList');
+            
+            if (entities.length === 0) {
+                element.innerHTML = '<div class="loading">No entities found</div>';
+                return;
+            }
+            
+            let html = '<table class="table"><thead><tr><th>Entity</th><th>Type</th><th>User</th><th>Context</th><th>Created</th></tr></thead><tbody>';
+            
+            entities.forEach(entity => {
+                html += `<tr>
+                    <td><strong>${entity.entity_text}</strong></td>
+                    <td><span class="entity-type">${entity.entity_type}</span></td>
+                    <td>${entity.user_name}</td>
+                    <td>${entity.context_info || 'N/A'}</td>
+                    <td>${new Date(entity.created_at).toLocaleString()}</td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table>';
+            element.innerHTML = html;
+        }
+
+        // Load consolidation data
+        async function loadConsolidation() {
+            try {
+                const response = await fetch('/api/memory/consolidation');
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayConsolidation(data.data);
+                } else {
+                    showError('consolidationList', 'Failed to load consolidation data');
+                }
+            } catch (error) {
+                showError('consolidationList', 'Error loading consolidation data: ' + error.message);
+            }
+        }
+
+        // Display consolidation data
+        function displayConsolidation(data) {
+            const element = document.getElementById('consolidationList');
+            
+            let html = '<div class="card" style="margin-bottom: 20px;">';
+            html += '<h4>Summary Statistics</h4>';
+            html += `<div class="metric"><span class="metric-label">Total Runs</span><span class="metric-value">${data.summary.total_runs}</span></div>`;
+            html += `<div class="metric"><span class="metric-label">Messages Consolidated</span><span class="metric-value">${data.summary.total_messages_consolidated}</span></div>`;
+            html += `<div class="metric"><span class="metric-label">Summaries Created</span><span class="metric-value">${data.summary.total_summaries_created}</span></div>`;
+            html += `<div class="metric"><span class="metric-label">Tokens Saved</span><span class="metric-value">${data.summary.total_tokens_saved}</span></div>`;
+            html += '</div>';
+            
+            if (data.history.length > 0) {
+                html += '<table class="table"><thead><tr><th>User</th><th>Run Time</th><th>Messages</th><th>Summaries</th><th>Tokens Saved</th></tr></thead><tbody>';
+                
+                data.history.forEach(run => {
+                    html += `<tr>
+                        <td>${run.user_name}</td>
+                        <td>${new Date(run.run_at).toLocaleString()}</td>
+                        <td>${run.messages_consolidated}</td>
+                        <td>${run.summaries_created}</td>
+                        <td>${run.tokens_saved_estimate || 'N/A'}</td>
+                    </tr>`;
+                });
+                
+                html += '</tbody></table>';
+            } else {
+                html += '<div class="loading">No consolidation runs found</div>';
+            }
+            
+            element.innerHTML = html;
+        }
+
+        // Perform search
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+            
+            const resultsElement = document.getElementById('searchResults');
+            resultsElement.innerHTML = '<div class="loading">Searching...</div>';
+            
+            try {
+                const response = await fetch(`/api/memory/search?q=${encodeURIComponent(query)}&limit=20`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displaySearchResults(data.data);
+                } else {
+                    resultsElement.innerHTML = '<div class="error">Search failed: ' + data.error + '</div>';
+                }
+            } catch (error) {
+                resultsElement.innerHTML = '<div class="error">Search error: ' + error.message + '</div>';
+            }
+        }
+
+        // Display search results
+        function displaySearchResults(data) {
+            const element = document.getElementById('searchResults');
+            let html = '';
+            
+            if (data.conversations.length > 0) {
+                html += '<h4>Conversations</h4>';
+                data.conversations.forEach(conv => {
+                    html += `<div class="result-item">
+                        <h4>${conv.user_name}</h4>
+                        <p>${conv.message}</p>
+                        <div class="result-meta">${conv.message_type} • ${new Date(conv.created_at).toLocaleString()}</div>
+                    </div>`;
+                });
+            }
+            
+            if (data.entities.length > 0) {
+                html += '<h4>Entities</h4>';
+                data.entities.forEach(entity => {
+                    html += `<div class="result-item">
+                        <h4>${entity.entity_text} <span class="entity-type">${entity.entity_type}</span></h4>
+                        <p>${entity.context_info || 'No context available'}</p>
+                        <div class="result-meta">${entity.user_name} • ${new Date(entity.created_at).toLocaleString()}</div>
+                    </div>`;
+                });
+            }
+            
+            if (html === '') {
+                html = '<div class="loading">No results found</div>';
+            }
+            
+            element.innerHTML = html;
+        }
+
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+
+        // Update pagination
+        function updatePagination(pagination, elementId, loadFunction) {
+            const element = document.getElementById(elementId);
+            let html = '';
+            
+            if (pagination.pages > 1) {
+                // Previous button
+                html += `<button ${pagination.page === 1 ? 'disabled' : ''} onclick="${loadFunction.name}(${pagination.page - 1})">Previous</button>`;
+                
+                // Page numbers
+                for (let i = Math.max(1, pagination.page - 2); i <= Math.min(pagination.pages, pagination.page + 2); i++) {
+                    html += `<button class="${i === pagination.page ? 'active' : ''}" onclick="${loadFunction.name}(${i})">${i}</button>`;
+                }
+                
+                // Next button
+                html += `<button ${pagination.page === pagination.pages ? 'disabled' : ''} onclick="${loadFunction.name}(${pagination.page + 1})">Next</button>`;
+            }
+            
+            element.innerHTML = html;
+        }
+
+        // Show error
+        function showError(elementId, message) {
+            document.getElementById(elementId).innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // Search on Enter key
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // Persistent Memories Functions
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+                const users = Array.isArray(data) ? data : (data.users || []);
+
+                const select = document.getElementById('user-filter');
+                // Keep the "All Users" option
+                select.innerHTML = '<option value="">All Users</option>';
+
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user;
+                    option.textContent = user;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        async function loadMemories() {
+            try {
+                const userFilter = document.getElementById('user-filter').value;
+                const categoryFilter = document.getElementById('category-filter').value;
+
+                let url = '/api/memories?';
+                if (userFilter) url += `user_name=${encodeURIComponent(userFilter)}&`;
+                if (categoryFilter) url += `category=${encodeURIComponent(categoryFilter)}`;
+
+                const response = await fetch(url);
+                const result = await response.json();
+                const memories = result.data?.memories || result.memories || result || [];
+
+                const container = document.getElementById('memories-list');
+
+                if (memories.length === 0) {
+                    container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">No memories found</p>';
+                    return;
+                }
+
+                const categoryIcons = {
+                    'schedule': '📅',
+                    'fact': '💡',
+                    'task': '✓',
+                    'preference': '❤️',
+                    'reminder': '⏰',
+                    'other': '📌'
+                };
+
+                const importanceColors = {
+                    1: '#95a5a6', 2: '#95a5a6', 3: '#95a5a6',
+                    4: '#3498db', 5: '#3498db', 6: '#3498db',
+                    7: '#f39c12', 8: '#f39c12',
+                    9: '#e74c3c', 10: '#e74c3c'
+                };
+
+                container.innerHTML = memories.map(mem => `
+                    <div style="background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid ${importanceColors[mem.importance]};">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                            <div>
+                                <span style="background: #ecf0f1; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; margin-right: 8px;">
+                                    ${categoryIcons[mem.category]} ${mem.category.toUpperCase()}
+                                </span>
+                                <span style="color: #7f8c8d; font-size: 0.9em;">${mem.user_name}</span>
+                                <span style="color: #bdc3c7; font-size: 0.85em; margin-left: 10px;">
+                                    ${new Date(mem.extracted_at).toLocaleString()}
+                                </span>
+                            </div>
+                            <div>
+                                <span style="background: ${importanceColors[mem.importance]}; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; margin-right: 8px;">
+                                    ${mem.importance}/10
+                                </span>
+                                <button onclick="deleteMemory(${mem.id})" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                        <div style="color: #2c3e50; line-height: 1.5;">${mem.content}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading memories:', error);
+                document.getElementById('memories-list').innerHTML = '<p style="color: red;">Error loading memories</p>';
+            }
+        }
+
+        function showAddMemoryForm() {
+            document.getElementById('add-memory-form').style.display = 'block';
+        }
+
+        function cancelAddMemory() {
+            document.getElementById('add-memory-form').style.display = 'none';
+            // Clear form
+            document.getElementById('new-memory-user').value = '';
+            document.getElementById('new-memory-content').value = '';
+            document.getElementById('new-memory-importance').value = '5';
+        }
+
+        async function addMemory() {
+            try {
+                const userName = document.getElementById('new-memory-user').value.trim();
+                const category = document.getElementById('new-memory-category').value;
+                const content = document.getElementById('new-memory-content').value.trim();
+                const importance = parseInt(document.getElementById('new-memory-importance').value);
+
+                if (!userName || !content) {
+                    alert('Please fill in user name and content');
+                    return;
+                }
+
+                const response = await fetch('/api/memories', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        user_name: userName,
+                        category: category,
+                        content: content,
+                        importance: importance
+                    })
+                });
+
+                if (response.ok) {
+                    cancelAddMemory();
+                    loadMemories();
+                    loadUsers(); // Refresh users list
+                } else {
+                    alert('Error adding memory');
+                }
+            } catch (error) {
+                console.error('Error adding memory:', error);
+                alert('Error adding memory');
+            }
+        }
+
+        async function deleteMemory(id) {
+            if (!confirm('Are you sure you want to delete this memory?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/memories/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadMemories();
+                } else {
+                    alert('Error deleting memory');
+                }
+            } catch (error) {
+                console.error('Error deleting memory:', error);
+                alert('Error deleting memory');
+            }
+        }
+
+        // Auto-refresh status every 30 seconds
+        setInterval(loadMemoryStatus, 30000);
+    </script>
+</body>
+</html>
+
+
+
+
+

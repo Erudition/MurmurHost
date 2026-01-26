@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flutter App Logs - Mumble AI Control Panel</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .controls {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .filter-group {
+            display: inline-block;
+            margin-right: 20px;
+            margin-bottom: 10px;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+        .filter-group select, .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .logs-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            padding: 12px 20px;
+            border-bottom: 1px solid #eee;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        .log-entry:hover {
+            background-color: #f8f9fa;
+        }
+        .log-timestamp {
+            color: #6c757d;
+            font-weight: bold;
+        }
+        .log-level {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin: 0 8px;
+        }
+        .log-level.DEBUG { background: #e9ecef; color: #495057; }
+        .log-level.INFO { background: #d1ecf1; color: #0c5460; }
+        .log-level.WARNING { background: #fff3cd; color: #856404; }
+        .log-level.ERROR { background: #f8d7da; color: #721c24; }
+        .log-screen {
+            color: #007bff;
+            font-weight: bold;
+        }
+        .log-message {
+            color: #212529;
+        }
+        .log-data {
+            margin-top: 5px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-left: 3px solid #007bff;
+            font-size: 12px;
+            color: #495057;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        .no-logs {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        .stats {
+            padding: 15px 20px;
+            background: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+            font-size: 14px;
+        }
+        .auto-refresh {
+            display: inline-block;
+            margin-left: 20px;
+        }
+        .auto-refresh input[type="checkbox"] {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Flutter App Logs</h1>
+            <p>Real-time logs from the Android Flutter app</p>
+        </div>
+        
+        <div class="controls">
+            <div class="filter-group">
+                <label for="levelFilter">Log Level:</label>
+                <select id="levelFilter">
+                    <option value="">All Levels</option>
+                    <option value="DEBUG">DEBUG</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="screenFilter">Screen:</label>
+                <select id="screenFilter">
+                    <option value="">All Screens</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="limitFilter">Limit:</label>
+                <select id="limitFilter">
+                    <option value="50">50 logs</option>
+                    <option value="100" selected>100 logs</option>
+                    <option value="200">200 logs</option>
+                    <option value="500">500 logs</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="loadLogs()">🔄 Refresh</button>
+            <button class="btn btn-secondary" onclick="clearLogs()">🗑️ Clear</button>
+            
+            <div class="auto-refresh">
+                <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+                <label for="autoRefresh">Auto-refresh (30s)</label>
+            </div>
+        </div>
+        
+        <div class="stats" id="stats">
+            Loading...
+        </div>
+        
+        <div class="logs-container" id="logsContainer">
+            <div class="loading">Loading logs...</div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+        
+        function loadLogs() {
+            const level = document.getElementById('levelFilter').value;
+            const screen = document.getElementById('screenFilter').value;
+            const limit = document.getElementById('limitFilter').value;
+            
+            let url = `/api/logs?limit=${limit}`;
+            if (level) url += `&level=${level}`;
+            if (screen) url += `&screen=${screen}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('logsContainer').innerHTML = 
+                            `<div class="no-logs">Error loading logs: ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    displayLogs(data.logs);
+                    updateStats(data.count, data.logs);
+                })
+                .catch(error => {
+                    document.getElementById('logsContainer').innerHTML = 
+                        `<div class="no-logs">Error loading logs: ${error.message}</div>`;
+                });
+        }
+        
+        function displayLogs(logs) {
+            const container = document.getElementById('logsContainer');
+            
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="no-logs">No logs found</div>';
+                return;
+            }
+            
+            let html = '';
+            logs.forEach(log => {
+                const timestamp = new Date(log.timestamp).toLocaleString();
+                const levelClass = log.level || 'INFO';
+                const screenText = log.screen ? `<span class="log-screen">[${log.screen}]</span>` : '';
+                const dataHtml = log.data && Object.keys(log.data).length > 0 ? 
+                    `<div class="log-data">${JSON.stringify(log.data, null, 2)}</div>` : '';
+                
+                html += `
+                    <div class="log-entry">
+                        <span class="log-timestamp">${timestamp}</span>
+                        <span class="log-level ${levelClass}">${levelClass}</span>
+                        ${screenText}
+                        <span class="log-message">${log.message}</span>
+                        ${dataHtml}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function updateStats(count, logs) {
+            const levelCounts = {};
+            const screenCounts = {};
+            
+            logs.forEach(log => {
+                levelCounts[log.level] = (levelCounts[log.level] || 0) + 1;
+                if (log.screen) {
+                    screenCounts[log.screen] = (screenCounts[log.screen] || 0) + 1;
+                }
+            });
+            
+            let statsHtml = `Showing ${count} logs`;
+            if (Object.keys(levelCounts).length > 0) {
+                statsHtml += ' | Levels: ';
+                statsHtml += Object.entries(levelCounts)
+                    .map(([level, count]) => `${level}: ${count}`)
+                    .join(', ');
+            }
+            
+            document.getElementById('stats').innerHTML = statsHtml;
+            
+            // Update screen filter options
+            updateScreenFilter(screenCounts);
+        }
+        
+        function updateScreenFilter(screenCounts) {
+            const screenFilter = document.getElementById('screenFilter');
+            const currentValue = screenFilter.value;
+            
+            // Clear existing options except "All Screens"
+            screenFilter.innerHTML = '<option value="">All Screens</option>';
+            
+            // Add screen options
+            Object.entries(screenCounts)
+                .sort((a, b) => b[1] - a[1]) // Sort by count descending
+                .forEach(([screen, count]) => {
+                    const option = document.createElement('option');
+                    option.value = screen;
+                    option.textContent = `${screen} (${count})`;
+                    screenFilter.appendChild(option);
+                });
+            
+            // Restore previous selection
+            screenFilter.value = currentValue;
+        }
+        
+        function clearLogs() {
+            if (confirm('Are you sure you want to clear all logs? This action cannot be undone.')) {
+                // This would need a DELETE endpoint to be implemented
+                alert('Clear logs functionality would be implemented here');
+            }
+        }
+        
+        function toggleAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            
+            if (checkbox.checked) {
+                autoRefreshInterval = setInterval(loadLogs, 30000); // 30 seconds
+            } else {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+        }
+        
+        // Load logs on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLogs();
+        });
+        
+        // Add event listeners for filters
+        document.getElementById('levelFilter').addEventListener('change', loadLogs);
+        document.getElementById('screenFilter').addEventListener('change', loadLogs);
+        document.getElementById('limitFilter').addEventListener('change', loadLogs);
+    </script>
+</body>
+</html>

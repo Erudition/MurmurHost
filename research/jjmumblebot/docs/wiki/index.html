@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JJMumbleBot - Table Of Contents</title>
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../css/content-pages.css" crossorigin="anonymous">
+    <style>
+        li {
+            font-size: 18px;
+        }
+        .main-content {
+            padding: 25px;
+            margin-bottom: 5%;
+        }
+        footer {
+            background-color: black;
+            position: fixed;
+            bottom: 0;
+            height: 5%;
+            width: 100%;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-content">
+    </div>
+    <footer></footer>
+    <script>
+        $.get("https://duckboss.github.io/JJMumbleBot/wiki/templates/navbar.html", function(data){
+            $(".main-content").html(data);
+        });
+    </script>
+</body>
+</html>

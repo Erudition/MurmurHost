@@ -1,0 +1,7 @@
+command,level
+wiki,1
+setloginsound,4
+getloginsound,4
+clearloginsound,4
+toggleloginsounds,4
+setdefaultloginsound,4

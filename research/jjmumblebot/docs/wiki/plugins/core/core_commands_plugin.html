@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JJMumbleBot - Core Commands Plugin</title>
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../../../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../../../css/content-pages.css" crossorigin="anonymous">
+</head>
+<body>
+    <nav id="table_of_contents"></nav>
+    <div class="main-content">
+        <h2 id="page-title">Core Commands Plugin</h2>
+        <hr>
+        <p>This is a built-in core plugin that follows the plugin template system.</p>
+
+        <h3>Usage:</h3>
+        <code>!exit/!quit</code>: Initializes the bot exit procedure.<br>
+        <code>!stopplugin 'plugin_name'</code>: Stops a running plugin using the plugin's shutdown procedures.<br>
+        <code>!startplugin 'plugin_name'</code>: Starts an inactive plugin using the plugin's startup procedures.<br>
+        <code>!restartplugin 'plugin_name</code>: Restarts a currently running plugin.<br>
+        <code>!help</code>: Displays a list of the help commands for all the available plugins.<br>
+        <code>!help 'plugin_name'</code>: Displays all the commands available for the given plugin.<br>
+        <code>!setcomment 'comment_text'</code>: Sets the bot's user comment with the given text.<br>
+        <code>!resetcomment</code>: Resets the bot's user comment to the default text.<br>
+        <code>!pguistresstest</code>: Conducts a stress test of the PGUI system in the channel chat. Uses a default of 5 lines.<br>
+        <code>!pguistresstest 'number of lines'</code>: Conducts a stress test of the PGUI system in the channel chat. Optionally set the number of lines to control the size of the test.<br>
+        <code>!version</code>: Displays the bot version.<br>
+        <code>!restartplugins</code>: Quits and restarts all active plugins.<br>
+        <code>!restart</code>: Completely stops the bot and restarts it.<br>
+        <code>!saferestart</code>: Completely stops the bot and restarts it.<br>
+        <code>!about</code>: Displays the bots about screen.<br>
+        <code>!refreshuserprivileges</code>: Refreshes the custom user privileges from the config folder and updates the database.<br>
+        <code>!refreshpermissions</code>: Refreshes the custom command permissions from the config folder and updates the database.<br>
+        <code>!refreshaliases</code>: Refreshes the custom aliases from the config folder and updates the database.<br>
+        <code>!importuserprivileges 'url_to_csv_file'</code>: Imports user privileges a csv file downloaded from the provided URL and updates the database.<br>
+        <code>!importpermissions 'url_to_csv_file'</code>: Imports command permissions a csv file downloaded from the provided URL and updates the database.<br>
+        <code>!importaliases 'url_to_csv_file'</code>: Imports aliases from a csv file downloaded from the provided URL and updates the database.<br>
+        <code>!getpermission 'commmand_name'</code>: Displays the command's permission level.<br>
+        <code>!setpermission 'commmand_name' 'permission_level'</code>: Sets the command's permission level to the number provided.<br>
+        <code>!setalias 'alias_name' 'command'|'command'|...</code>: Registers an alias for single/multi-commands.<br>
+        <code>!removealias 'alias_name'</code>: Removes a registered alias by the given name.<br>
+        <code>!clearaliases</code>: Removes all registered aliases.<br>
+        <code>!aliases</code>: Displays a list of registered aliases.<br>
+        <code>!history</code>: Displays the command history.<br>
+        <code>!clearhistory</code>: Clears the command history.<br>
+        <code>!uptime</code>: Displays the amount of time the bot has been online.
+        <div>
+        <details open>
+            <summary>Plugin Metadata</summary>
+            <pre><code>
+    [Plugin Information]
+    PluginVersion = 5.2.0
+    PluginName = Core Commands
+    PluginDescription = The Core Commands plugin handles core functionality commands.
+    PluginLanguage = EN
+    PluginCommands: [
+                    "stopplugin",
+                    "startplugin",
+                    "restartplugin",
+                    "sleep",
+                    "version",
+                    "about",
+                    "uptime",
+                    "exit",
+                    "restart",
+                    "saferestart",
+                    "restartplugins",
+                    "setcomment",
+                    "resetcomment",
+                    "pguistresstest",
+                    "help",
+                    "refreshuserprivileges",
+                    "refreshpermissions",
+                    "refreshaliases",
+                    "importuserprivileges",
+                    "importpermissions",
+                    "importaliases",
+                    "getpermission",
+                    "setpermission",
+                    "setalias",
+                    "aliases",
+                    "removealias",
+                    "clearaliases",
+                    "clearhistory",
+                    "history"
+                    ]
+
+    [Plugin Settings]
+    ThreadWaitForCommands: ["exit", "sleep"]
+    UseSingleThread = False
+
+    [Plugin Type]
+    ControllablePlugin = False
+    AudioPlugin = False
+    ImagePlugin = False
+    CorePlugin = True
+    ExtensionPlugin = False
+            </code></pre>
+        </details>
+        </div>
+    </div>
+    <footer></footer>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JJMumbleBot - Text-To-Speech Plugin</title>
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../../../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../../../css/content-pages.css" crossorigin="anonymous">
+</head>
+<body>
+    <nav id="table_of_contents"></nav>
+    <div class="main-content">
+        <h2 id="page-title">Text-To-Speech Plugin</h2>
+        <p>
+            This is a built-in extension plugin that follows the plugin template system. <br>
+            This is a plugin that lets the bot speak to the user using a text-to-speech system. It has multiple voices available,
+            and can even download and store voice clips.<br>
+            Full voice list can be found here: <a href="https://docs.aws.amazon.com/polly/latest/dg/voicelist.html">Amazon Polly - Voice List</a>
+        </p>
+
+        <h3>Usage:</h3>
+        <code>!tts 'voice_name' 'message'/!tts 'message'</code>: Plays a message with text to speech with a given voice.<br>
+        <code>!ttslist</code>: Displays all the available text to speech tracks in private messages.<br>
+        <code>!ttsvoices</code>: Displays all the available text to speech voices.<br>
+        <code>!ttsdownload 'clip_name' 'voice_name' 'message'</code>: Downloads and saves a text to speech clip with the given voice and message.<br>
+        <code>!ttsplay 'clip_name'</code>: Plays the given text to speech track from storage.<br>
+        <code>!ttsplayquiet 'clip_name'</code>: Plays the given text to speech track from storage but doesn't display any errors if encountered.<br>
+        <code>!ttsdelete 'clip_name.oga'</code>: Deletes a clip from the text to speech storage. Be sure to specify the .oga extension.
+
+    <div>
+        <details open>
+            <summary>Plugin Metadata</summary>
+            <pre><code>
+    [Plugin Information]
+    PluginVersion = 5.0.0
+    PluginName = Text To Speech
+    PluginDescription = The Text To Speech plugin uses the streamlabs polly tts API to play text to speech.
+    PluginLanguage = EN
+    PluginCommands: [
+                    "tts",
+                    "ttsplay",
+                    "ttsplayquiet",
+                    "ttslist",
+                    "ttsdownload",
+                    "ttsdelete",
+                    "ttsvoices"
+                    ]
+
+    [Plugin Settings]
+    TextCharLimit = 256
+    ; Default voice to use:
+    DefaultVoice = Brian
+    ; Full voice list can be found here: https://docs.aws.amazon.com/polly/latest/dg/voicelist.html
+    AllowedVoiceList = [
+                        "Zeina", "Zhiyu", "Naja", "Mads", "Lotte", "Ruben",
+                        "Nicole", "Russell", "Amy", "Emma", "Brian", "Aditi", "Raveena",
+                        "Ivy", "Joanna", "Kendra", "Kimberly", "Salli", "Joey", "Justin",
+                        "Matthew", "Geraint", "Celine", "Mathieu", "Chantal", "Marlene",
+                        "Vicki", "Hans", "Dora", "Karl", "Carla", "Bianca", "Giorgio",
+                        "Mizuki", "Takumi", "Seoyeon", "Liv", "Ewa", "Maja", "Jacek", "Jan",
+                        "Vitoria", "Ricardo", "Ines", "Cristiano", "Carmen", "Tatyana", "Maxim",
+                        "Conchita", "Lucia", "Enrique", "Mia", "Penelope", "Miguel", "Astrid", "Filiz",
+                        "Gwyneth"
+                       ]
+    ; List commands that need the core thread to wait for completion.
+    ; This may include processes that require multiple commands in succession.
+    ; For example: [Youtube Plugin - !yt -> !p] process requires 2 commands in that order.
+    ThreadWaitForCommands: []
+    UseSingleThread = False
+
+    [Plugin Type]
+    ControllablePlugin = True
+    AudioPlugin = True
+    ImagePlugin = False
+    CorePlugin = False
+    ExtensionPlugin = True
+            </code></pre>
+        </details>
+    </div>
+    </div>
+    <footer></footer>
+</body>
+</html>

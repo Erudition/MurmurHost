@@ -1,0 +1,302 @@
+$black: #000 !default;
+$darkgray: #888 !default;
+$gray: #a9a9a9 !default;
+$lightgray: #d3d3d3 !default;
+$bg-color: #eee !default;
+$white: #fff !default;
+
+$font-color: $black !default;
+$font-family: Arial, sans-serif !default;
+$chat-input-color: $font-color !default;
+
+$toolbar-hover-bg-color: $lightgray !default;
+$toolbar-hover-border-color: $gray !default;
+$toolbar-active-bg-color: $white !default;
+$toolbar-active-border-color: $toolbar-hover-bg-color !default;
+$dialog-header-color: $white !default;
+$dialog-header-bg-color: $black !default;
+$dialog-bg-color: $bg-color !default;
+$dialog-border-color: $darkgray !default;
+$dialog-color: $font-color !default;
+$dialog-button-border-color: $darkgray !default;
+$dialog-button-bg-color: $white !default;
+$dialog-button-color: $dialog-color !default;
+$dialog-input-border-color: $darkgray !default;
+$dialog-input-bg-color: $white !default;
+$dialog-input-color: $dialog-color !default;
+
+html,
+body {
+  background-color: $bg-color;
+  color: $font-color;
+  font-family: $font-family;
+  margin: 0;
+  overflow: hidden;
+  height: 100%;
+}
+#container {
+  height: 100%;
+}
+
+.guacamole,
+.guacamole-placeholder {
+  display: block;
+  float: left;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  width: 100%;
+  height: calc(99% - 38px);
+}
+
+.guacamole-placeholder {
+  background-image: url("img/AdobeStock_74031703.png");
+  background-repeat: no-repeat;
+  background-position: bottom;
+  background-size: cover;
+}
+.guacamole-placeholder img {
+  padding: 2px;
+}
+
+.guacamole-bottomline {
+  width: 100%;
+  text-align: center;
+  position: absolute;
+  bottom: 40px;
+  font-weight: bold;
+  padding: 2px;
+}
+
+iframe {
+  width: 100%;
+  height: 100%;
+}
+
+.toolbar-horizontal {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: flex-start;
+  height: 36px;
+  width: 100%;
+}
+.toolbar-horizontal img {
+  height: 28px;
+  width: 28px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.toolbar-horizontal img.tb-disabled {
+  filter: grayscale(100%);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.toolbar-horizontal img.tb-disabled:hover {
+  border: 1px solid transparent;
+  background-color: transparent;
+}
+.toolbar-horizontal img:hover {
+  border: 1px solid $toolbar-hover-bg-color;
+  background-color: $toolbar-hover-border-color;
+}
+.toolbar-horizontal .tb-active {
+  border: 1px solid $toolbar-active-bg-color;
+  background-color: $toolbar-active-border-color;
+}
+#message-box {
+  border: none;
+  background: none;
+  color: $chat-input-color;
+  margin: 5px 0 5px 0;
+  padding: 2px;
+  height: 20px;
+  width: 100%;
+}
+form {
+  margin: 0;
+  padding: 0;
+}
+
+.tb-information.disabled,
+.tb-record {
+  filter: grayscale(100%);
+}
+.dialog-header {
+  height: 20px;
+  width: calc(100% - 10px);
+  padding: 5px;
+  text-align: center;
+  color: $dialog-header-color;
+  background-color: $dialog-header-bg-color;
+}
+.dialog-footer {
+  width: calc(100% - 20px);
+  margin: 10px;
+}
+.dialog-submit {
+  float: right;
+}
+.dialog-close,
+.dialog-submit {
+  width: 45%;
+  font-size: 15px;
+  border: 1px $dialog-button-border-color solid;
+  border-radius: 3px;
+  background-color: $dialog-button-bg-color;
+  color: $dialog-button-color;
+  padding: 1px;
+  cursor: pointer;
+}
+.connect-dialog table {
+  width: 100%;
+}
+.connect-dialog td {
+  text-align: left;
+}
+.connect-dialog td:first-child {
+  text-align: right;
+}
+.connect-dialog .dialog-close {
+  opacity: 0;
+}
+.sample-rate-hints {
+  margin-top: 10px;
+
+  &__title {
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    li {
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+  }
+}
+.dialog {
+  position: absolute;
+  max-height: calc(100% - 20px);
+  max-width: calc(100% - 20px);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  overflow: auto;
+  background-color: $dialog-bg-color;
+  color: $dialog-color;
+  border: 1px $dialog-border-color solid;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+}
+.settings-dialog table {
+  width: 100%;
+  padding: 5px;
+}
+.settings-dialog td {
+  width: 50%;
+}
+.settings-dialog table select {
+  width: 100%;
+}
+.settings-dialog table input {
+  width: 100%;
+  margin: 0px;
+}
+.connect-dialog input[type="text"],
+select {
+  font-size: 15px;
+  border: 1px $dialog-input-border-color solid;
+  border-radius: 3px;
+  background-color: $dialog-input-bg-color;
+  color: $dialog-input-color;
+  padding: 2px;
+  width: calc(100% - 8px);
+}
+.connect-dialog input[type="password"] {
+  font-size: 15px;
+  border: 1px $dialog-input-border-color solid;
+  border-radius: 3px;
+  background-color: $dialog-input-bg-color;
+  color: $dialog-input-color;
+  padding: 2px;
+  width: calc(100% - 8px);
+}
+.connection-info-dialog {
+  h3 {
+    margin-bottom: 5px;
+  }
+  .dialog-content {
+    padding-left: 20px;
+  }
+}
+
+/* Microphone permission retry overlay (bottom-left) */
+.mic-permission-retry {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background-color: #ffc107;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  animation: slideInLeft 0.3s ease-out;
+
+  .mic-permission-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #333;
+
+    .mic-icon {
+      font-size: 20px;
+      filter: grayscale(100%) brightness(0.5);
+    }
+
+    span {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .mic-permission-button {
+    .mic-permission-message {
+      margin: 4px 0 0;
+      font-size: 13px;
+      max-width: 240px;
+    }
+      background-color: #fff;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: #f5f5f5;
+      }
+    }
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Mobile view */
+
+@media only screen and (max-width: 600px) and (min-width: 320px) and (min-height: 600px) {
+  .dialog {
+    min-width: 350px;
+  }
+}

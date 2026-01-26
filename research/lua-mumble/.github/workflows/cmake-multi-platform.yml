@@ -1,0 +1,159 @@
+name: CMake on multiple platforms
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  create_or_update_release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release_tag.outputs.release_tag }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set Release Tag to Current Date
+      id: release_tag
+      run: |
+        RELEASE_TAG="v$(date +'%Y-%m-%d')"
+        echo "Release tag: $RELEASE_TAG"
+        echo "::set-output name=release_tag::$RELEASE_TAG"
+
+    - name: Check if Release Already Exists
+      id: release_exists
+      run: |
+        RELEASE_TAG="${{ steps.release_tag.outputs.release_tag }}"
+        EXISTING_RELEASE=$(gh release view $RELEASE_TAG --json tagName --jq ".tagName" || echo "null")
+        echo "Existing release tag: $EXISTING_RELEASE"
+        echo "Wanted release tag  : $RELEASE_TAG"
+        if [ "$EXISTING_RELEASE" == "$RELEASE_TAG" ]; then
+          echo "release_exists=true" >> $GITHUB_ENV
+        else
+          echo "release_exists=false" >> $GITHUB_ENV
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create New Release (if necessary)
+      if: env.release_exists == 'false'
+      run: |
+        RELEASE_TAG="${{ steps.release_tag.outputs.release_tag }}"
+        gh release create $RELEASE_TAG --title "Release $RELEASE_TAG" --notes "Release created on $RELEASE_TAG"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build_and_upload:
+    needs: create_or_update_release
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest] #, windows-latest]
+        build_type: [Release]
+        lua_version: [
+          { version: "luajit", flags: "-DLUAVER=luajit -DLUALIB=/usr/local/lib/lua/5.1" },
+          { version: "lua51", flags: "-DLUAVER=lua51 -DLUALIB=/usr/local/lib/lua/5.1" },
+          { version: "lua52", flags: "-DLUAVER=lua52 -DLUALIB=/usr/local/lib/lua/5.2" },
+          { version: "lua53", flags: "-DLUAVER=lua53 -DLUALIB=/usr/local/lib/lua/5.3" }
+        ]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libssl-dev \
+          libluajit-5.1-dev \
+          liblua5.1-0-dev \
+          liblua5.2-dev \
+          liblua5.3-dev \
+          liblua5.4-dev \
+          protobuf-c-compiler \
+          libprotobuf-c-dev \
+          libopus-dev \
+          libsndfile1-dev \
+          libsamplerate0-dev \
+          libuv1-dev
+
+    - name: Install Dependencies (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install -y cmake openssl luajit lua51 lua52 lua53 protoc opus-tools libsndfile
+
+    - name: Download libuv from GitHub
+      if: matrix.os == 'windows-latest'
+      run: |
+        LIBUV_VERSION=$(curl -s https://api.github.com/repos/libuv/libuv/releases/latest | jq -r .tag_name)
+        curl -L -o libuv.zip https://github.com/libuv/libuv/archive/${LIBUV_VERSION}.zip
+        unzip libuv.zip
+      shell: bash
+
+    - name: Build libuv from source (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd libuv-${LIBUV_VERSION}
+        cmake -B build -G "Visual Studio 16 2019"
+        cmake --build build --config Release
+        cp -r libuv-${LIBUV_VERSION}/build/Release/*.lib libuv-${LIBUV_VERSION}/build/Release/*.dll ${{ github.workspace }}/libuv_build
+      shell: bash
+
+    - name: Set reusable strings
+      id: strings
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build/${{ matrix.lua_version.version }}" >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    - name: Configure CMake (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -S ${{ github.workspace }} \
+          ${{ matrix.lua_version.flags }}
+      shell: bash
+
+    - name: Configure CMake (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -S ${{ github.workspace }} \
+          ${{ matrix.lua_version.flags }} \
+          -DLIBUV_INCLUDE_DIR=${{ github.workspace }}/libuv-${LIBUV_VERSION} \
+          -DLIBUV_LIBRARY=${{ github.workspace }}/libuv_build
+      shell: bash
+
+    - name: Build
+      run: |
+        cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+    - name: Test
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      run: ctest --build-config ${{ matrix.build_type }}
+
+    - name: Zip Build Files
+      run: |
+        ZIP_FILE="release-${{ matrix.lua_version.version }}.zip"
+        find ${{ steps.strings.outputs.build-output-dir }} -name "*.so" -exec zip -j $ZIP_FILE {} +
+        echo "Zipped library files into $ZIP_FILE"
+      working-directory: ${{ github.workspace }}
+
+    - name: Upload Zip to Release
+      run: |
+        RELEASE_TAG="${{ needs.create_or_update_release.outputs.release_tag }}"
+        ZIP_FILE="release-${{ matrix.lua_version.version }}.zip"
+        if [ -f "$ZIP_FILE" ]; then
+          gh release upload $RELEASE_TAG $ZIP_FILE --clobber
+        else
+          echo "Error: $ZIP_FILE does not exist."
+          exit 1
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

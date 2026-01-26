@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTS Voice Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-microphone-alt"></i> TTS Voice Generator</h1>
+                <p>Generate high-quality text-to-speech audio with diverse voices from around the world</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Text Input Section -->
+            <section class="input-section">
+                <div class="input-group">
+                    <label for="text-input" class="input-label">
+                        <i class="fas fa-edit"></i> Enter your text
+                    </label>
+                    <textarea 
+                        id="text-input" 
+                        class="text-input" 
+                        placeholder="Type or paste your text here... (Maximum 5000 characters)"
+                        maxlength="5000"
+                        rows="4"
+                    ></textarea>
+                    <div class="char-count">
+                        <span id="char-count">0</span> / 5000 characters
+                    </div>
+                </div>
+            </section>
+
+            <!-- Engine Selection Section -->
+            <section class="engine-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-cog"></i> TTS Engine</h2>
+                    <div class="engine-selector">
+                        <label class="engine-option">
+                            <input type="radio" name="engine" value="piper" checked>
+                            <span class="engine-label">
+                                <i class="fas fa-robot"></i> Piper TTS
+                                <small>Wide variety of voices and languages</small>
+                            </span>
+                        </label>
+                        <label class="engine-option">
+                            <input type="radio" name="engine" value="silero">
+                            <span class="engine-label">
+                                <i class="fas fa-bolt"></i> Silero TTS
+                                <small>High-quality neural voices with GPU acceleration</small>
+                            </span>
+                        </label>
+                        <label class="engine-option">
+                            <input type="radio" name="engine" value="chatterbox">
+                            <span class="engine-label">
+                                <i class="fas fa-clone"></i> Chatterbox TTS
+                                <small>AI voice cloning - Clone any voice!</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Voice Cloning Section (Chatterbox) -->
+            <section class="voice-cloning-section" id="voice-cloning-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="fas fa-magic"></i> Voice Cloning</h2>
+                    <p class="section-desc">Upload a 3-10 second audio sample to clone a voice</p>
+                </div>
+
+                <div class="cloning-container">
+                    <div class="upload-section">
+                        <div class="file-upload-box">
+                            <input type="file" id="clone-audio-file" accept="audio/wav,audio/mp3,audio/mpeg,audio/m4a,audio/x-m4a,audio/*" style="display: none;">
+                            <label for="clone-audio-file" class="file-upload-label">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <span>Drop audio file here or click to upload</span>
+                                <small>WAV, MP3, M4A, or other audio formats (3-10 seconds recommended)</small>
+                            </label>
+                            <div id="file-info" class="file-info" style="display: none;">
+                                <i class="fas fa-file-audio"></i>
+                                <span id="file-name"></span>
+                                <button id="remove-file" class="btn-icon"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="cloning-controls">
+                            <div class="form-group">
+                                <label for="clone-language">Language</label>
+                                <select id="clone-language" class="form-control">
+                                    <option value="en">English</option>
+                                    <option value="es">Spanish</option>
+                                    <option value="fr">French</option>
+                                    <option value="de">German</option>
+                                    <option value="it">Italian</option>
+                                    <option value="pt">Portuguese</option>
+                                    <option value="pl">Polish</option>
+                                    <option value="tr">Turkish</option>
+                                    <option value="ru">Russian</option>
+                                    <option value="nl">Dutch</option>
+                                    <option value="cs">Czech</option>
+                                    <option value="ar">Arabic</option>
+                                    <option value="zh-cn">Chinese</option>
+                                    <option value="ja">Japanese</option>
+                                    <option value="hu">Hungarian</option>
+                                    <option value="ko">Korean</option>
+                                </select>
+                            </div>
+                            
+                            <div class="button-group">
+                                <button id="test-clone-btn" class="btn btn-secondary" disabled>
+                                    <i class="fas fa-play"></i> Test Voice
+                                </button>
+                                <button id="save-clone-btn" class="btn btn-primary" disabled>
+                                    <i class="fas fa-save"></i> Save to Library
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Voice Library -->
+                    <div class="voice-library">
+                        <h3><i class="fas fa-book"></i> Your Cloned Voices</h3>
+                        <div id="cloned-voices-grid" class="voice-grid">
+                            <!-- Cloned voices will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Voice Selection Section -->
+            <section class="voice-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-voice"></i> Select Voice</h2>
+                    <div class="filter-controls">
+                        <select id="region-filter" class="filter-select">
+                            <option value="">All Regions</option>
+                        </select>
+                        <select id="gender-filter" class="filter-select">
+                            <option value="">All Genders</option>
+                            <option value="female">Female</option>
+                            <option value="male">Male</option>
+                            <option value="multi">Multi-Speaker</option>
+                        </select>
+                        <select id="quality-filter" class="filter-select">
+                            <option value="">All Qualities</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                            <option value="x_low">X-Low</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="voice-grid" id="voice-grid">
+                    <!-- Voices will be populated by JavaScript -->
+                </div>
+            </section>
+
+            <!-- Controls Section -->
+            <section class="controls-section">
+                <div class="control-buttons">
+                    <button id="preview-btn" class="btn btn-secondary" disabled>
+                        <i class="fas fa-play"></i> Preview Voice
+                    </button>
+                    <button id="generate-btn" class="btn btn-primary" disabled>
+                        <i class="fas fa-download"></i> Generate & Download
+                    </button>
+                </div>
+                
+                <div class="status-message" id="status-message"></div>
+            </section>
+
+            <!-- Audio Player Section -->
+            <section class="audio-section" id="audio-section" style="display: none;">
+                <div class="audio-player">
+                    <h3><i class="fas fa-headphones"></i> Generated Audio</h3>
+                    <audio id="audio-player" controls class="audio-controls">
+                        Your browser does not support the audio element.
+                    </audio>
+                    <div class="audio-info">
+                        <span id="selected-voice-name"></span>
+                        <span id="audio-duration"></span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2024 TTS Voice Generator. Powered by Piper TTS, Silero TTS & Chatterbox TTS.</p>
+        </footer>
+    </div>
+
+    <!-- Save Voice Modal -->
+    <div class="modal" id="save-voice-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-save"></i> Save Cloned Voice</h3>
+                <button class="modal-close" id="close-modal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="voice-name">Voice Name *</label>
+                    <input type="text" id="voice-name" class="form-control" placeholder="e.g., John Smith Voice" required>
+                </div>
+                <div class="form-group">
+                    <label for="voice-description">Description (Optional)</label>
+                    <textarea id="voice-description" class="form-control" rows="3" placeholder="Brief description of the voice..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="voice-tags">Tags (Optional)</label>
+                    <input type="text" id="voice-tags" class="form-control" placeholder="e.g., male, deep, professional (comma-separated)">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-save" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-save" class="btn btn-primary">Save Voice</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p id="loading-message">Generating audio...</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+.popup {
+    padding-top: 50px !important;
+}
+
+.block {
+    position: absolute;
+    height: 100%;
+    box-model: border-box;
+    padding: 4px;
+    border-radius: 5px;
+    margin-top: 0;
+    z-index: 20;
+
+    &:hover,
+    &.open {
+        z-index: 100;
+        border: 2px solid rgb(100, 53, 201);
+    }
+}
+
+.image {
+    position: absolute !important;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 40px;
+}
+
+.info {
+    height: 1em;
+    display: flex;
+    justify-content: flex-start;
+    color: rgba(0, 0, 0, 0.6);
+
+    div:not(:last-child) {
+        margin-right: 10px;
+    }
+
+    div:not(:first-child) {
+        margin-left: 10px;
+    }
+}

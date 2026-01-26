@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JJMumbleBot - What's New [v5.3.0]</title>
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../../css/content-pages.css" crossorigin="anonymous">
+</head>
+<body>
+<nav id="table_of_contents"></nav>
+<div class="main-content">
+    <h2 id="page-title"><small><b>v</b></small>5.3.0 Update</h2>
+    <h4>New Features and Fixes</h4>
+    <h6><a href="https://github.com/DuckBoss/JJMumbleBot/releases/tag/v5.3.0">Github Download Link</a></h6>
+    <hr/>
+    <div class="update-guide alert alert-dismissible alert-warning">
+        <h5>Update Guide To v5.3.0 For <small><b>v</b></small>5.2.0 Users</h5>
+
+        <details>
+            <summary class="unselectable">Click Here To View Guide</summary>
+            <ul>
+                <li><h6><b class="update-guide-header btn-danger">Required</b> Update Config.ini File</h6>
+                    Update your <code>config.ini</code> file to include the two new audio ducking fields under the <code>[Media Settings]</code> section:
+                    <pre class="left-shifted-pre">
+                        [Media Settings]
+                        DuckingStartDelay = 1.0
+                        DuckingEndDelay = 1.0
+                    </pre>
+                    <b>Be sure to remove the <code>DuckingDelay</code>field if it exists.</b>
+                    <i>Refer to the /templates/ directory to see a template of the file.</i>
+                </li>
+            </ul>
+        </details>
+    </div>
+    <div class="update-guide alert alert-dismissible alert-warning">
+        <h5>Update Guide To v5.3.0 For <small><b>v</b></small>5.1.0 and <small><b>v</b></small>5.1.1 Users</h5>
+
+        <details>
+            <summary class="unselectable">Click Here To View Guide</summary>
+            <ul>
+                <li><h6><b class="update-guide-header btn-danger">Required</b> Update Config.ini File</h6>
+                    Update your <code>config.ini</code> file to include <code>EnableDatabaseIntegrityCheck=True</code> under the <code>[Main Settings]</code> section:
+                    <pre class="left-shifted-pre">
+                        [Main Settings]
+                        EnableDatabaseIntegrityCheck = True
+                    </pre>
+                    Update your <code>config.ini</code> file to include the two new audio ducking fields under the <code>[Media Settings]</code> section:
+                    <pre class="left-shifted-pre">
+                        [Media Settings]
+                        DuckingStartDelay = 1.0
+                        DuckingEndDelay = 1.0
+                    </pre>
+                    <b>Be sure to remove the <code>DuckingDelay</code>field if it exists.</b>
+                    <i>Refer to the /templates/ directory to see a template of the file.</i>
+                </li>
+                <li><h6><b class="update-guide-header btn-warning">Optional</b> Setup Custom Aliases File</h6>
+                    Rename your <code>global_aliases.csv</code> file to <code>custom_aliases.csv</code><br/>
+                    <i>Alternatively, if you don't have custom aliases under <code>global_aliases.csv</code> you can simply delete it.</i>
+                </li>
+                <li><h6><b class="update-guide-header btn-warning">Optional</b> Setup Custom User Privileges File</h6>
+                    Create a <code>custom_user_privileges.csv</code> file <i>(template provided in /templates/ folder)</i> and fill it with custom user privileges as required.<br/>
+                    This is important since the new update will require the database to be regenerated, so doing this will prevent any loss of custom user privileges.
+                </li>
+                <li><h6><b class="update-guide-header btn-warning">Optional</b> Setup Custom Command Permissions File</h6>
+                    Create a <code>custom_permissions.csv</code> file <i>(template provided in /templates/ folder)</i> and fill it with custom command permissions as required.<br/>
+                    This is important since the new update will require the database to be regenerated, so doing this will prevent any loss of custom command permissions.
+                </li>
+            </ul>
+        </details>
+    </div>
+    <hr/>
+    <div class="update-details">
+        <details>
+            <summary class="unselectable">Radio Streaming Support for Media Plugin <b class="update-details-header btn-success small">NEW</b></summary>
+            <ul>
+                Added support for streaming audio from radio stations.
+                <li>
+                    <code>!radiolink 'url'</code>: Start streaming audio from compatible radio stations.
+                </li>
+                <i>Please note that radio streaming isn't supported for all radio stations and it requires a direct link to the icecast stream.<br>
+                    Some examples of working radio station links are provided in the plugin's metadata file.</i><br>
+                <i>You can use existing audio commands with radio streaming such as <code>!stop/!pause/!resume/!playing</code></i><br>
+                <i>Radio streaming isn't supported for all radio stations and it requires a direct link to the icecast stream.<br>
+                Some examples of working radio station links are provided in the plugin's metadata file.</i><br>
+                <li>
+                    <p> Here are some examples of working icecast radio streams:</p>
+                    <ul>
+                        <li>Rock:<code>!radiolink http://stream.radioreklama.bg:80/radio1rock128</code></li>
+                        <li>Latin/Spanish:<code>!radiolink http://radio35.virtualtronics.com:8129/stream</code>"</li>
+                        <li>Korean Misc:<code>!radiolink https://das-edge13-live365-dal02.cdnstream.com/a48202</code></li>
+                        <li>KPOP:<code>!radiolink https://antares.dribbcast.com/proxy/kpop?mp=/s</code></li>
+                        <li>JPOP:<code>!radiolink https://antares.dribbcast.com/proxy/jpop?mp=/s</code></li>
+                        <li>NPR News:<code>!radiolink https://npr-ice.streamguys1.com/live.mp3</code></li>
+                        <li>Video Game Music:<code>!radiolink http://stream.rpgamers.net:8000/rpgn</code></li>
+                    </ul>
+                </li>
+            </ul>
+        </details>
+    </div>
+    <div class="update-details">
+        <details>
+            <summary class="unselectable">Audio Ducking Updates <b class="update-details-header btn-warning small">UPDATED</b></summary>
+            <p>Split the audio ducking delay option into two separate delay options for finer control over the audio ducking feature:</p>
+            <ul>
+                <li>Removed <code>!duckdelay</code> command and replaced it with <code>!duckstartdelay</code> and <code></code>!duckenddelay</code>.</li>
+                <li>Use <code>!duckstartdelay</code> <seconds> to specify how long the bot should wait before ducking the audio volume when it detects user voice activity.</li>
+                <li>Use <code>!duckenddelay</code> <seconds> to specify how long the bot should wait before restoring the ducked volume back to the original value when it detects no user voice activity.</li>
+                <li>Updated command line arguments and config options to match the above changes.</li>
+            </ul>
+        </details>
+    </div>
+    <div class="update-details">
+        <details>
+            <summary class="unselectable">Adjusted <code>!sbrandom...</code> Related Commands Logic for Sound Board Plugin <b class="update-details-header btn-warning small">UPDATED</b></summary>
+            <p>
+                Adjusted logic for the <code>!sbrandom...</code> related commands to choose a different audio clip if it picks the same audio clip as the last time it was run. This change is to mitigate cases when it chooses the same audio clip back to back, making it feel less random.
+            </p>
+        </details>
+    </div>
+    <div class="update-details">
+        <details>
+            <summary class="unselectable">Dependency Updates <b class="update-details-header btn-warning small">UPDATED</b></summary>
+            <p>This project now requires a minimum of <code>Python 3.9+ (previously 3.7+)</code> to improve compatibility with the <code>yt-dlp</code> dependency and newer VLC versions which is heavily used for audio-related plugins.</p>
+            <p>The project has been updated to use <code>yt-dlp</code> instead of <code>youtube-dl</code> since the original project is no longer in development.
+                <br>This new library works identically and is actively maintained.</p>
+            <p>I've updated the pymumble dependency to use a <a href="https://github.com/DuckBoss/pymumble">stable fork that I've created</a> of <a href="https://github.com/oopsbagel/pymumble">another fork by oopsbagel</a> which aims to improve and modernize pymumble since the original project is no longer in active development.
+                <br>I've decided to fork it into my own repository so I can verify patches and ensure stability for usage in this bot.</p>
+        </details>
+    </div>
+    <div class="update-details">
+        <details>
+            <summary class="unselectable">Bug Fixes <b class="update-details-header btn-danger small">FIXES</b></summary>
+            <ul>
+                <li>Fixed an issue where image thumbnails could not be generated due to an outdated API.</li>
+                <li>Added missing default user connection sound file to server tools plugin: default_user_sound.wav</li>
+                <li>Improved and fixed documentation in several plugins.</li>
+            </ul>
+        </details>
+    </div>
+    <div class="update-details">
+        <details>
+            <summary class="unselectable">Other Changes <b class="update-details-header btn-info small">MISC</b></summary>
+            <ul>
+                <li>General formatting fixes and test cases updates.</li>
+                <li>Updated plugin templating to improve plugin creation experience.</li>
+                <li>Updated pymumble and pymumble callback references to use updated API.</li>
+                <li>Updated wiki with new requirements, upgrade guide, and release pages.</li>
+                <li>Optimized logging and debugging messages in the internal database library.</li>
+                <li>Added utility methods to find audio clips from the plugin media directory and integrate better with the sound board plugin.</li>
+                <li>Refactored user privilege checks.</li>
+                <li>Updated repository README to allow new users to better understand the features of JJMumbleBot.</li>
+                <li>Updated <code>Quick Setup Utility</code> web utility for v5.2.0</li>
+                <li>Updated bot internal version and updated plugins to v5.2.0</li>
+            </ul>
+        </details>
+    </div>
+    <div class="update-details">
+        <details>
+            <summary class="unselectable">Known Issues <b class="update-details-header btn-danger small">KNOWN ISSUES</b></summary>
+            <p>
+                <b>Server Tools Plugin:</b>
+                The feature to play a 'connection sound' when a user connects to the server is currently broken.
+                <br>I highly suggest not using this feature. I don't plan on fixing it in this project and I will be addressing it in the larger rework project 'Mumimo'.
+                <br>If you still decide to use it and the audio queue freezes, simply use !stop to flush the audio queue.
+            </p>
+            <p>
+                <b>Text to Speech Plugin</b>: 
+                The text to  speech plugin is not functional to dynamically convert text to speech and currently only works for TTS clips that have already been downloaded previously.
+                <br>An update is required to use a new endpoint that still works.
+            </p>
+        </details>
+    </div>
+</div>
+<footer></footer>
+</body>
+</html>

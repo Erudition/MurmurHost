@@ -1,0 +1,42 @@
+$grey: 100;
+
+.brush {
+    cursor: move;
+    cursor: -webkit-grab;
+    cursor: -moz-grab;
+    background: rgba($grey, $grey, $grey, 0.8);
+    border-top: 1px solid rgb($grey, $grey, $grey);
+    border-bottom: 1px solid rgb($grey, $grey, $grey);
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 30;
+    height: 100%;
+
+    &.moving {
+        cursor: -webkit-grabbing;
+        cursor: -moz-grabbing;
+    }
+
+    @mixin resize {
+        cursor: ew-resize;
+        width: 8px;
+        position: absolute;
+        box-sizing: border-box;
+        height: 100%;
+        border-radius: 0 !important;
+    }
+
+    .left {
+        @include resize;
+        border-left: 1px solid rgb($grey, $grey, $grey);
+        background-color: transparent;
+        left: 0;
+    }
+
+    .right {
+        @include resize;
+        border-right: 1px solid rgb($grey, $grey, $grey);
+        background-color: transparent;
+        right: 0;
+    }
+}

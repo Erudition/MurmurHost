@@ -1,0 +1,109 @@
+.flexContainer {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+
+    a {
+        color: inherit;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    > * {
+        display: inline-block;
+        white-space: nowrap;
+        padding-right: 10px;
+    }
+}
+
+.tagGroup {
+    min-height: 32px;
+}
+
+.buttonContainer {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.button {
+    white-space: nowrap;
+}
+
+.descriptionContainer {
+    word-wrap: break-word;
+}
+
+.card {
+    z-index: 100;
+}
+
+.sound {
+    position: relative;
+    z-index: 10;
+    min-height: 120px;
+    cursor: pointer;
+
+    .description {
+        z-index: 1000;
+        position: relative;
+        margin-bottom: 10px;
+    }
+
+    .tags {
+        z-index: 1000;
+        position: relative;
+        margin-top: 20px !important;
+    }
+
+    .gradient {
+        background-size: cover;
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 100%;
+        z-index: 2;
+        background: linear-gradient(rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.3));
+        pointer-events: none;
+    }
+
+    .background {
+        background-size: cover;
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 100%;
+        z-index: 2;
+        opacity: 50%;
+        background-color: rgba(34, 36, 38, 0.08);
+        pointer-events: none;
+    }
+}
+
+.select {
+    z-index: 105;
+    background-color: #fff;
+}
+
+.notEmpty {
+    margin-top: -10px;
+
+    .tag {
+        margin-top: -10px !important;
+    }
+}
+
+.metaTag {
+    height: 22px;
+}
+
+.rating {
+    display: flex;
+    align-items: center;
+}
+
+.mini {
+    min-height: 85px !important;
+}

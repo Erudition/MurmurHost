@@ -1,0 +1,18 @@
+.ellipsis {
+    display: flex;
+    justify-content: center;
+
+    a,
+    a:hover {
+        color: rgb(119, 119, 119) !important;
+    }
+}
+
+.sourceText {
+    color: rgb(119, 119, 119);
+    font-weight: normal !important;
+}
+
+.sourceIcon {
+    width: 2em !important;
+}

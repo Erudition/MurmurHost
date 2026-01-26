@@ -1,0 +1,474 @@
+services:
+  mumble-server:
+    image: mumblevoip/mumble-server:latest
+    container_name: mumble-server
+    ports:
+      - "48000:64738/tcp"
+      - "48000:64738/udp"
+    volumes:
+      - /mnt/h/Mumble-AI/mumble-data:/data
+      - /mnt/h/Mumble-AI/mumble-config.ini:/etc/mumble-server.ini
+    environment:
+      - MUMBLE_SUPERUSER_PASSWORD=${MUMBLE_PASSWORD:-changeme}
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  faster-whisper:
+    build:
+      context: ./faster-whisper-service
+      dockerfile: Dockerfile
+    container_name: faster-whisper
+    runtime: nvidia
+    ports:
+      - "5000:5000"
+    environment:
+      - MODEL_SIZE=${WHISPER_MODEL:-base}
+      - DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  piper-tts:
+    build:
+      context: ./piper-tts-service
+      dockerfile: Dockerfile
+    container_name: piper-tts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5001:5001"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+    volumes:
+      - piper-voices:/app/models
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  silero-tts:
+    build:
+      context: ./silero-tts-service
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5004:5004"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - silero-models:/app/models
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  chatterbox-tts:
+    build:
+      context: ./chatterbox-tts-service
+      dockerfile: Dockerfile
+    container_name: chatterbox-tts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5005:5005"
+    environment:
+      - PORT=5005
+      - DEVICE=auto
+      - TTS_MODEL=tts_models/multilingual/multi-dataset/xtts_v2
+      - MODEL_DIR=/app/models
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+    volumes:
+      - chatterbox-models:/app/models
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: mumble-ai-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-mumbleai}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+      - POSTGRES_DB=${POSTGRES_DB:-mumble_ai}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mumbleai -d mumble_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web-control-panel:
+    build:
+      context: ./web-control-panel
+      dockerfile: Dockerfile
+    container_name: web-control-panel
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    ports:
+      - "5002:5002"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+      - REDIS_URL=redis://redis:6379
+      - CHROMADB_URL=http://chromadb:8000
+    volumes:
+      - piper-voices:/app/piper_voices
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  mumble-bot:
+    build:
+      context: ./mumble-bot
+      dockerfile: Dockerfile
+    container_name: mumble-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mumble-server:
+        condition: service_started
+      faster-whisper:
+        condition: service_started
+      piper-tts:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    ports:
+      - "8082:8080"  # Health check port
+    environment:
+      - MUMBLE_HOST=mumble-server
+      - MUMBLE_PORT=64738
+      - MUMBLE_USERNAME=${BOT_USERNAME:-AI-Bot}
+      - MUMBLE_PASSWORD=${BOT_PASSWORD:-}
+      - WHISPER_URL=http://faster-whisper:5000
+      - PIPER_URL=http://piper-tts:5001
+      - SILERO_URL=http://silero-tts:5004
+      - CHATTERBOX_URL=http://chatterbox-tts:5005
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+      # Retry configuration
+      - RETRY_MAX_ATTEMPTS=${RETRY_MAX_ATTEMPTS:-3}
+      - RETRY_BASE_DELAY=${RETRY_BASE_DELAY:-1.0}
+      - RETRY_MAX_DELAY=${RETRY_MAX_DELAY:-60.0}
+      # Circuit breaker configuration
+      - WHISPER_CIRCUIT_THRESHOLD=${WHISPER_CIRCUIT_THRESHOLD:-5}
+      - WHISPER_CIRCUIT_TIMEOUT=${WHISPER_CIRCUIT_TIMEOUT:-60.0}
+      - PIPER_CIRCUIT_THRESHOLD=${PIPER_CIRCUIT_THRESHOLD:-5}
+      - PIPER_CIRCUIT_TIMEOUT=${PIPER_CIRCUIT_TIMEOUT:-60.0}
+      - CHROMADB_URL=http://chromadb:8000
+      - REDIS_URL=redis://redis:6379
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+      - OLLAMA_CIRCUIT_THRESHOLD=${OLLAMA_CIRCUIT_THRESHOLD:-5}
+      - OLLAMA_CIRCUIT_TIMEOUT=${OLLAMA_CIRCUIT_TIMEOUT:-60.0}
+      - DB_CIRCUIT_THRESHOLD=${DB_CIRCUIT_THRESHOLD:-3}
+      - DB_CIRCUIT_TIMEOUT=${DB_CIRCUIT_TIMEOUT:-30.0}
+      # Health check configuration
+      - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-30.0}
+      - HEALTH_PORT=8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - mumble-ai-network
+
+  sip-mumble-bridge:
+    build:
+      context: ./sip-mumble-bridge
+      dockerfile: Dockerfile
+    container_name: sip-mumble-bridge
+    depends_on:
+      mumble-server:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "10000-10010:10000-10010/udp"
+    environment:
+      - SIP_PORT=5060
+      - SIP_USERNAME=${SIP_USERNAME:-mumble-bridge}
+      - SIP_PASSWORD=${SIP_PASSWORD:-bridge123}
+      - SIP_DOMAIN=*
+      - RTP_PORT_MIN=10000
+      - RTP_PORT_MAX=10010
+      - WHISPER_URL=http://faster-whisper:5000
+      - PIPER_URL=http://piper-tts:5001
+      - SILERO_URL=http://silero-tts:5004
+      - CHATTERBOX_URL=http://chatterbox-tts:5005
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
+      - LOG_LEVEL=DEBUG
+      - CHROMADB_URL=http://chromadb:8000
+      - REDIS_URL=redis://redis:6379
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  mumble-web:
+    image: rankenstein/mumble-web:latest
+    container_name: mumble-web
+    depends_on:
+      mumble-server:
+        condition: service_started
+    volumes:
+      - ./mumble-web-config/config.local.js:/home/node/dist/config.local.js:ro
+    environment:
+      - MUMBLE_SERVER=mumble-server:64738
+    # Note: No external port - accessed via nginx-ssl-proxy
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  mumble-web-nginx:
+    image: nginx:alpine
+    container_name: mumble-web-nginx
+    depends_on:
+      - mumble-web
+    ports:
+      - "8081:443"
+    volumes:
+      - ./mumble-web-ssl/cert.pem:/etc/nginx/ssl/cert.pem:ro
+      - ./mumble-web-ssl/key.pem:/etc/nginx/ssl/key.pem:ro
+      - ./mumble-web-nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  tts-web-interface:
+    build:
+      context: ./tts-web-interface
+      dockerfile: Dockerfile
+    container_name: tts-web-interface
+    depends_on:
+      postgres:
+        condition: service_healthy
+      piper-tts:
+        condition: service_started
+      silero-tts:
+        condition: service_started
+      chatterbox-tts:
+        condition: service_started
+    ports:
+      - "5003:5003"
+    environment:
+      - PIPER_TTS_URL=http://piper-tts:5001
+      - SILERO_TTS_URL=http://silero-tts:5004
+      - CHATTERBOX_TTS_URL=http://chatterbox-tts:5005
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+    volumes:
+      - cloned-voices:/app/cloned_voices
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  email-summary-service:
+    build:
+      context: ./email-summary-service
+      dockerfile: Dockerfile
+    container_name: email-summary-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5006:5006"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - CHECK_INTERVAL_SECONDS=60
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+
+  landing-page:
+    build:
+      context: ./landing-page
+      dockerfile: Dockerfile
+    container_name: landing-page
+    ports:
+      - "5007:5007"
+    environment:
+      - NODE_ENV=production
+      - PORT=5007
+      - HOST_IP=${HOST_IP:-10.0.0.74}
+    volumes:
+      - ./mumble_ai_flutter/build/app/outputs/flutter-apk:/app/apk:ro
+      - ./docs:/app/docs:ro
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5007/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: mumble-ai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - mumble-ai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:0.5.0
+    container_name: mumble-ai-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chromadb-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - mumble-ai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  whisper-web-interface:
+    build:
+      context: ./whisper-web-interface
+      dockerfile: Dockerfile
+    container_name: whisper-web-interface
+    depends_on:
+      postgres:
+        condition: service_healthy
+      faster-whisper:
+        condition: service_started
+    ports:
+      - "5008:5008"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-mumble_ai}
+      - DB_USER=${POSTGRES_USER:-mumbleai}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-mumbleai123}
+      - WHISPER_URL=http://faster-whisper:5000
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:latest}
+    volumes:
+      - /tmp:/tmp
+    restart: unless-stopped
+    networks:
+      - mumble-ai-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  mumble-ai-network:
+    driver: bridge
+
+volumes:
+  mumble-data:
+  postgres-data:
+  piper-voices:
+  silero-models:
+  chatterbox-models:
+  cloned-voices:
+  redis-data:
+  chromadb-data:

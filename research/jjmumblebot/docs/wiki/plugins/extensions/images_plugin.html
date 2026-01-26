@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../../../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../../../css/content-pages.css" crossorigin="anonymous">
+</head>
+<body>
+    <nav id="table_of_contents"></nav>
+    <div class="main-content">
+        <h2>Images Plugin</h2>
+        <p>
+        This is a built-in extension plugin that follows the plugin template system. <br>
+        This plugin can post images into the channel from urls, or from a local directory.
+        </p>
+
+        <h3>Usage:</h3>
+        <code>!post 'image_url'</code>: Posts the image from the url in the channel chat.<br>
+        <code>!img 'image_name'</code>: Posts locally hosted images in the channel chat. The image must be a jpg.<br>
+        <code>!imglist</code>: Lists all locally hosted images in a private message.
+    <div>
+        <details open>
+            <summary>Plugin Metadata</summary>
+            <pre><code>
+    [Plugin Information]
+    PluginVersion = 5.0.0
+    PluginName = Images
+    PluginDescription = An image handling plugin that can display images from the internet or local storage.
+    PluginLanguage = EN
+    PluginCommands: [
+                    "post",
+                    "imgsearch",
+                    "img",
+                    "imglist"
+                    ]
+
+    [Plugin Settings]
+    ; Default frame size for images uploaded through the images plugin
+    ImageFrameSize = 5
+    ; Default frame color for images uploaded through the images plugin
+    ImageFrameColor = black
+    ; List commands that need the core thread to wait for completion.
+    ; This may include processes that require multiple commands in succession.
+    ; For example: [Youtube Plugin - !yt -> !p] process requires 2 commands in that order.
+    ThreadWaitForCommands: []
+    UseSingleThread = False
+
+    [Plugin Type]
+    ControllablePlugin = True
+    AudioPlugin = False
+    ImagePlugin = True
+    CorePlugin = False
+    ExtensionPlugin = True
+            </code></pre>
+        </details>
+    </div>
+    </div>
+    <footer></footer>
+</body>
+</html>

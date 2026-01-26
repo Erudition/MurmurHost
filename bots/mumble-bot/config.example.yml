@@ -1,0 +1,15 @@
+url: example.com
+publicApiUrl: example.com
+name: bot
+keyFile: "./bot.key"
+certFile: "./bot.cert"
+mumblePassword: "this is optional"
+channel: Root
+audioCacheAmount: 500
+port: 23278
+dbPassword: "Database password"
+dbHost: localhost
+dbUsername: bot
+dbName: bot
+tmpDir: data/tmp
+soundsDir: data/sounds

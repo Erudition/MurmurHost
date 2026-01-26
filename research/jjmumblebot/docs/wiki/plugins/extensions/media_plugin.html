@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JJMumbleBot - Media Plugin</title>
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../../../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../../../css/content-pages.css" crossorigin="anonymous">
+</head>
+<body>
+    <nav id="table_of_contents"></nav>
+    <div class="main-content">
+        <h2 id="page-title">Media Plugin</h2>
+        <p>
+            This is a built-in extension plugin that follows the plugin template system. <br>
+            This plugin allows users to search for youtube songs and play it in the channel. <br>
+            It has a built in queuing system so it can play multiple songs in order.
+        </p>
+
+        <div class="section">
+            <p>
+                <h4>Usage:</h4>
+                <code>!ytsearch 'search_term'</code>: Searches youtube for a song/video.<br>
+                <code>!ytplaylist 'playlist_url'</code>: Adds the given youtube playlist to the queue.<br>
+                <code>!ytplay 'item_number' 'item_count'(optional)</code>: Plays the selected song from youtube.<br>
+                <code>!link 'link_url'</code>: Adds the given youtube/soundcloud link to the queue.<br>
+                <code>!linkfront 'link_url'</code>: Priority inserts the given link to the front of the queue.
+            </p>
+        </div>
+
+        <hr>
+        <h4> Quick Start: </h4><br>
+        <div class="section">
+            <h5> Option 1: Search youtube and choose a video</h5>
+            <p>
+                <b> Use the <code>!ytsearch</code> command to search youtube for a video: </b> <br>
+                <code>!ytsearch video_name</code>: searches youtube for the video provided.<br>
+                <b> Choose one of the selections prompted with the <code>!p</code> command: </b> <br>
+                <code>!ytplay 5</code>: plays the 5th video in the selection prompt.<br>
+            </p>
+        </div>
+
+        <div class="section">
+            <h5> Option 2: Provide a direct youtube/soundcloud link </h5>
+            <p>
+                <b> Use the <code>!link</code> command to add a track to the queue: </b> <br>
+                <code>!link direct_link</code>: adds youtube or soundcloud tracks to the queue.<br>
+            </p>
+        </div>
+
+        <div class="section">
+            <h5> Option 3: Provide a youtube playlist </h5>
+            <b> Use the <code>!ytplaylist</code> command to add an entire playlist to the queue: </b> <br>
+            <code>!ytplaylist playlist_link</code>: adds youtube playlist to the queue.
+        </div>
+
+        <p><b>Note: Playlists must be unlisted or public. Private playlists are not allowed.</b></p>
+
+        <h4>Encountering errors?</h4>
+        <ul>
+            <li>First check the <a href="https://github.com/DuckBoss/JJMumbleBot/wiki/F.A.Q.">FAQ</a> to see if you encounter any of the issues mentioned there.</li>
+            <li>If your issue isn't in the FAQ, post an issue report.</li>
+        </ul>
+
+        <div>
+        <details open>
+            <summary>Plugin Metadata</summary>
+            <pre><code>
+    [Plugin Information]
+    PluginVersion = 5.0.0
+    PluginName = Media
+    PluginDescription = The Media plugin plays Youtube tracks/playlists and SoundClip tracks.
+    PluginLanguage = EN
+    PluginCommands: [
+                    "link",
+                    "linkfront",
+                    "ytplaylist",
+                    "ytsearch",
+                    "ytplay"
+                    ]
+
+    [Plugin Settings]
+    ; Max number of search results to be shown by the !ytsearch command.
+    MaxSearchLength = 10
+    ; Max video length allowed by direct links to audio queues.
+    MaxVideoLength = 7000
+    ; The maximum videos allowed per playlist. If AllowPlaylistMax is enabled, larger playlists will truncate to this limit.
+    MaxPlaylistLength = 50
+    ; Allows you to play playlists up to the video limit (instead of rejecting the playlist completely)
+    AllowPlaylistMax = True
+    ; List commands that need the core thread to wait for completion.
+    ; This may include processes that require multiple commands in succession.
+    ; For example: [Youtube Plugin - !ytsearch -> !ytplay] process requires 2 commands in that order.
+    ThreadWaitForCommands: ["ytsearch", "ytplay"]
+    UseSingleThread = False
+
+    [Plugin Type]
+    ControllablePlugin = True
+    AudioPlugin = True
+    ImagePlugin = False
+    CorePlugin = False
+    ExtensionPlugin = True
+            </code></pre>
+        </details>
+        </div>
+    </div>
+    <footer></footer>
+</body>
+</html>

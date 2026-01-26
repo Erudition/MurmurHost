@@ -1,0 +1,17 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "outDir": "dist",
+    },
+    "include": [
+        "typings/*",
+        "src/**/*.ts?",
+        "src/**/*.ts"
+    ],
+    "exclude": [
+        "src/index.ts",
+        "src/commands",
+        "**/__tests__/**",
+        "**/__mocks__/**"
+    ]
+}

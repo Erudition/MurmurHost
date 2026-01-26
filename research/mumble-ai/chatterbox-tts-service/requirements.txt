@@ -1,0 +1,21 @@
+flask==3.0.0
+flask-cors==4.0.0
+werkzeug==3.0.1
+numpy==1.24.3
+scipy==1.11.3
+soundfile==0.12.1
+librosa==0.10.1
+pydub==0.25.1
+requests==2.31.0
+# TTS libraries
+TTS==0.22.0
+# Transformers - pinned to compatible version for TTS
+transformers==4.33.0
+# Database support (optional, for integration with your stack)
+psycopg2-binary==2.9.9
+# Additional audio processing
+audioread==3.0.1
+resampy==0.4.2
+# For GPU detection and management
+psutil==5.9.6
+

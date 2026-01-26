@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mumble-AI - AI-Powered Voice Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .gradient-bg-dark {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .status-healthy { color: #10b981; }
+        .status-unhealthy { color: #ef4444; }
+        .status-warning { color: #f59e0b; }
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900" x-data="landingPage()">
+    <!-- Navigation -->
+    <nav class="bg-white dark:bg-gray-800 shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <i class="fas fa-robot text-blue-600"></i> Mumble-AI
+                        </h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="https://github.com/chartmann1590/Mumble-AI.git" target="_blank" 
+                       class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                        <i class="fab fa-github text-xl"></i>
+                    </a>
+                    <button @click="toggleDarkMode()" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                        <i class="fas fa-moon dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:inline"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="gradient-bg text-white py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 class="text-5xl md:text-6xl font-bold mb-6">
+                Mumble-AI
+            </h1>
+            <p class="text-xl md:text-2xl mb-8 opacity-90">
+                AI-Powered Voice Assistant for Mumble VoIP
+            </p>
+            <p class="text-lg mb-12 max-w-3xl mx-auto opacity-80">
+                A comprehensive AI voice assistant ecosystem with speech recognition, multiple TTS engines, 
+                intelligent memory systems, email integration, and voice cloning capabilities.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="https://github.com/chartmann1590/Mumble-AI.git" target="_blank"
+                   class="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+                    <i class="fab fa-github mr-2"></i>View on GitHub
+                </a>
+                <a href="#services" class="bg-transparent border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-blue-600 transition-colors">
+                    <i class="fas fa-server mr-2"></i>View Services
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Service Status Dashboard -->
+    <section id="services" class="py-16 bg-white dark:bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                    <i class="fas fa-server mr-3"></i>Service Status
+                </h2>
+                <p class="text-gray-600 dark:text-gray-300">Real-time monitoring of all Mumble-AI services</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                <template x-for="service in services" :key="service.service">
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 card-hover">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-semibold text-gray-900 dark:text-white" x-text="service.name"></h3>
+                            <div class="flex items-center">
+                                <i :class="getStatusIcon(service.status)" 
+                                   :class="getStatusColor(service.status)"
+                                   class="text-lg"></i>
+                                <span :class="getStatusColor(service.status)" 
+                                      class="ml-2 text-sm font-medium" 
+                                      x-text="service.status"></span>
+                            </div>
+                        </div>
+                        <div class="text-sm text-gray-600 dark:text-gray-300">
+                            <p>Port: <span class="font-mono" x-text="service.port"></span></p>
+                            <p x-show="service.responseTime !== 'N/A'">
+                                Response: <span x-text="service.responseTime"></span>
+                            </p>
+                            <p x-show="service.error" class="text-red-500" x-text="service.error"></p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <div class="text-center">
+                <button @click="refreshStatus()" 
+                        class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                        :disabled="loading">
+                    <i class="fas fa-sync-alt mr-2" :class="{'animate-spin': loading}"></i>
+                    Refresh Status
+                </button>
+                <p class="text-sm text-gray-500 mt-2" x-text="'Last updated: ' + lastUpdated"></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Links -->
+    <section class="py-16 bg-gray-50 dark:bg-gray-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                    <i class="fas fa-link mr-3"></i>Quick Access
+                </h2>
+                <p class="text-gray-600 dark:text-gray-300">Direct links to all web interfaces</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <a :href="getServiceUrl(5002)" target="_blank"
+                   class="bg-white dark:bg-gray-800 rounded-lg p-6 card-hover block">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-cog text-blue-600 text-2xl mr-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Web Control Panel</h3>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-300">Manage AI models, voices, schedules, and memories</p>
+                </a>
+
+                <a :href="getServiceUrl(5003)" target="_blank"
+                   class="bg-white dark:bg-gray-800 rounded-lg p-6 card-hover block">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-microphone text-green-600 text-2xl mr-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white">TTS Voice Generator</h3>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-300">Generate and clone voices with multiple TTS engines</p>
+                </a>
+
+                <a :href="getServiceUrl(5008)" target="_blank"
+                   class="bg-white dark:bg-gray-800 rounded-lg p-6 card-hover block">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-closed-captioning text-indigo-600 text-2xl mr-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Whisper Transcription</h3>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-300">Advanced audio/video transcription with AI speaker recognition</p>
+                </a>
+
+                <a :href="getServiceUrl(8081, true)" target="_blank"
+                   class="bg-white dark:bg-gray-800 rounded-lg p-6 card-hover block">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-globe text-purple-600 text-2xl mr-4"></i>
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Mumble Web Client</h3>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-300">Web-based Mumble client with SSL support</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- APK Downloads -->
+    <section class="py-16 bg-white dark:bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                    <i class="fab fa-android mr-3"></i>Android App Downloads
+                </h2>
+                <p class="text-gray-600 dark:text-gray-300">Download the Flutter-based mobile app (In Development)</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <template x-for="apk in apkFiles" :key="apk.filename">
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="apk.filename"></h3>
+                            <span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm">
+                                <span x-text="apk.size"></span>
+                            </span>
+                        </div>
+                        
+                        <div class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                            <p>Modified: <span x-text="new Date(apk.modified).toLocaleDateString()"></span></p>
+                        </div>
+                        
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <a :href="downloadBaseUrl + apk.filename" 
+                               class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-center">
+                                <i class="fas fa-download mr-2"></i>Download APK
+                            </a>
+                            <button @click="generateQR(apk.filename)" 
+                                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                <i class="fas fa-qrcode mr-2"></i>Show QR Code
+                            </button>
+                        </div>
+                        
+                        <!-- QR Code Modal -->
+                        <div x-show="qrCode.filename === apk.filename" 
+                             x-transition:enter="transition ease-out duration-300"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="transition ease-in duration-200"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="mt-4 p-4 bg-white dark:bg-gray-600 rounded-lg text-center">
+                            <img :src="qrCode.data" alt="QR Code" class="mx-auto mb-2">
+                            <p class="text-sm text-gray-600 dark:text-gray-300">Scan to download on mobile</p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <div class="mt-8 p-4 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-lg">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-3"></i>
+                    <div>
+                        <h4 class="font-semibold text-yellow-800 dark:text-yellow-200">Development Status</h4>
+                        <p class="text-yellow-700 dark:text-yellow-300 text-sm">
+                            This Android app is currently in active development and may not be fully functional yet. 
+                            Features are being implemented and tested. The web control panel remains the primary interface.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Changelog -->
+    <section class="py-16 bg-gray-50 dark:bg-gray-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                    <i class="fas fa-history mr-3"></i>Recent Updates
+                </h2>
+                <p class="text-gray-600 dark:text-gray-300">Latest changes and improvements</p>
+            </div>
+            
+            <div class="space-y-6">
+                <template x-for="changelog in changelogs" :key="changelog.filename">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 card-hover">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-semibold text-gray-900 dark:text-white" x-text="changelog.component"></h3>
+                            <span class="text-sm text-gray-500 dark:text-gray-400" x-text="changelog.date"></span>
+                        </div>
+                        <div class="prose dark:prose-invert max-w-none" x-html="changelog.content"></div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="gradient-bg-dark text-white py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h3 class="text-xl font-bold mb-4">
+                        <i class="fas fa-robot mr-2"></i>Mumble-AI
+                    </h3>
+                    <p class="text-gray-300 mb-4">
+                        AI-powered voice assistant ecosystem for Mumble VoIP servers with advanced speech recognition, 
+                        multiple TTS engines, and intelligent memory systems.
+                    </p>
+                </div>
+                
+                <div>
+                    <h4 class="text-lg font-semibold mb-4">Quick Links</h4>
+                    <ul class="space-y-2">
+                        <li><a href="https://github.com/chartmann1590/Mumble-AI.git" target="_blank" class="text-gray-300 hover:text-white">GitHub Repository</a></li>
+                        <li><a :href="getServiceUrl(5002)" target="_blank" class="text-gray-300 hover:text-white">Web Control Panel</a></li>
+                        <li><a :href="getServiceUrl(5003)" target="_blank" class="text-gray-300 hover:text-white">TTS Voice Generator</a></li>
+                        <li><a :href="getServiceUrl(5008)" target="_blank" class="text-gray-300 hover:text-white">Whisper Transcription</a></li>
+                        <li><a :href="getServiceUrl(8081, true)" target="_blank" class="text-gray-300 hover:text-white">Mumble Web Client</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h4 class="text-lg font-semibold mb-4">Documentation</h4>
+                    <ul class="space-y-2">
+                        <li><a href="https://github.com/chartmann1590/Mumble-AI.git#readme" target="_blank" class="text-gray-300 hover:text-white">Setup Guide</a></li>
+                        <li><a href="https://github.com/chartmann1590/Mumble-AI.git#troubleshooting" target="_blank" class="text-gray-300 hover:text-white">Troubleshooting</a></li>
+                        <li><a href="https://github.com/chartmann1590/Mumble-AI.git#configuration" target="_blank" class="text-gray-300 hover:text-white">Configuration</a></li>
+                        <li><a href="https://github.com/chartmann1590/Mumble-AI.git#api-reference" target="_blank" class="text-gray-300 hover:text-white">API Reference</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-600 mt-8 pt-8 text-center">
+                <p class="text-gray-300">
+                    Built with ❤️ using Docker, Python, Node.js, and AI
+                </p>
+                <p class="text-gray-400 text-sm mt-2">
+                    MIT License - <a href="https://github.com/chartmann1590/Mumble-AI.git" target="_blank" class="hover:text-white">View on GitHub</a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function landingPage() {
+            return {
+                services: [],
+                changelogs: [],
+                apkFiles: [],
+                loading: false,
+                lastUpdated: 'Never',
+                qrCode: { filename: null, data: null },
+                darkMode: localStorage.getItem('darkMode') === 'true',
+                downloadBaseUrl: '/download/apk/',
+                deviceIP: 'localhost',
+                
+                init() {
+                    this.loadServices();
+                    this.loadChangelogs();
+                    this.loadApkFiles();
+                    this.loadDeviceIP();
+                    this.applyDarkMode();
+                    
+                    // Auto-refresh every 30 seconds
+                    setInterval(() => {
+                        this.loadServices();
+                    }, 30000);
+                },
+                
+                async loadServices() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch('/api/status');
+                        const data = await response.json();
+                        this.services = data.services;
+                        this.lastUpdated = new Date().toLocaleString();
+                    } catch (error) {
+                        console.error('Error loading services:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                async loadChangelogs() {
+                    try {
+                        const response = await fetch('/api/changelog');
+                        this.changelogs = await response.json();
+                    } catch (error) {
+                        console.error('Error loading changelogs:', error);
+                    }
+                },
+                
+                async loadApkFiles() {
+                    try {
+                        const response = await fetch('/api/apk');
+                        this.apkFiles = await response.json();
+                    } catch (error) {
+                        console.error('Error loading APK files:', error);
+                    }
+                },
+                
+                async loadDeviceIP() {
+                    try {
+                        const response = await fetch('/api/device-ip');
+                        const data = await response.json();
+                        this.deviceIP = data.deviceIP;
+                        this.downloadBaseUrl = data.downloadBaseUrl;
+                        console.log('Device IP loaded:', data);
+                    } catch (error) {
+                        console.error('Error loading device IP:', error);
+                    }
+                },
+                
+                async generateQR(filename) {
+                    try {
+                        const response = await fetch(`/api/qr/${filename}`);
+                        const data = await response.json();
+                        this.qrCode = {
+                            filename: filename,
+                            data: data.qrCode
+                        };
+                    } catch (error) {
+                        console.error('Error generating QR code:', error);
+                    }
+                },
+                
+                refreshStatus() {
+                    this.loadServices();
+                },
+
+                getServiceUrl(port, useHttps = false) {
+                    const protocol = useHttps ? 'https' : 'http';
+                    const hostname = window.location.hostname;
+                    return `${protocol}://${hostname}:${port}`;
+                },
+
+                getStatusIcon(status) {
+                    switch (status) {
+                        case 'healthy': return 'fas fa-check-circle';
+                        case 'unhealthy': return 'fas fa-times-circle';
+                        default: return 'fas fa-question-circle';
+                    }
+                },
+                
+                getStatusColor(status) {
+                    switch (status) {
+                        case 'healthy': return 'status-healthy';
+                        case 'unhealthy': return 'status-unhealthy';
+                        default: return 'status-warning';
+                    }
+                },
+                
+                toggleDarkMode() {
+                    this.darkMode = !this.darkMode;
+                    localStorage.setItem('darkMode', this.darkMode);
+                    this.applyDarkMode();
+                },
+                
+                applyDarkMode() {
+                    if (this.darkMode) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

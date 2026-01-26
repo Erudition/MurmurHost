@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JJMumbleBot - Bot Commands Plugin</title>
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../../../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../../../css/content-pages.css" crossorigin="anonymous">
+</head>
+<body>
+    <nav id="table_of_contents"></nav>
+    <div class="main-content">
+        <h2 id="page-title">Bot Commands Plugin</h2>
+        <hr>
+        <p>This is a built-in core plugin that follows the plugin template system.</p>
+
+        <h3>Usage:</h3>
+        <code>!echo 'message/image'</code>: Echoes a message/image in the chat.<br>
+        <code>!msg 'username' 'message'</code>: Anonymously private messages a user from the bot.<br>
+        <code>!log 'message'</code>: Manually logs a message by an administrator.<br>
+        <code>!kickuser 'username'</code>: Kicks the user from the server if the bot has the appropriate privileges.<br>
+        <code>!banuser 'username'</code>: Bans the user from the server if the bot has the appropriate privileges.<br>
+        <code>!moveuser 'username' 'channel_name'</code>: Moves a user from one channel to another.<br>
+        <code>!muteuser 'username'</code>: Mutes the use by the name provided.<br>
+        <code>!unmuteuser 'username'</code>: Unmutes the user by the name provided.<br>
+        <code>!deafenuser 'username'</code>: Deafens the use by the name provided.<br>
+        <code>!undeafenuser 'username'</code>: Undeafens the use by the name provided.<br>
+        <code>!showplugins</code>: Displays a list of all the active plugins.<br>
+        <code>!aliassearch 'alias_name</code>: Search for an alias from the full list of aliases available.<br>
+        <code>!cmdsearch 'command_name'</code>: Search for a command from the full list of commands available.<br>
+        <code>!makechannel 'channel_name'</code>: Creates a temporary channel with the given name.<br>
+        <code>!makepermanentchannel 'channel_name'</code>: Creates a permanent channel with the given name.<br>
+        <code>!removechannel</code>: Removes the channel the bot is in if it was created by the bot.<br>
+        <code>!renamechannel 'channel' 'new_channel_name'</code>: Renames the given channel with a new name.<br>
+        <code>!joinme</code>: Moves the bot to the users channel.<br>
+        <code>!joinuser 'username'</code>: Moves the bot to the specified users channel.<br>
+        <code>!move 'channel_name'</code>: Moves to an existing channel with the given name.<br>
+        <code>!leave</code>: Moves the bot to the default channel.<br>
+        <code>!showprivileges</code>: Displays the full user list with privilege levels.<br>
+        <code>!setprivileges 'username' 'level'</code>: Sets a user's privilege level.<br>
+        <code>!addprivileges 'username' 'level'</code>: Adds a new user to the user privilege list.<br>
+        <code>!showblacklist</code>: Displays the current list of users in the blacklist.<br>
+        <code>!blacklistuser 'username'</code>: Blacklists specific users from using certain plugin commands.<br>
+        <code>!whitelistuser 'username'</code>: Removes an existing user from the blacklist.
+        <div>
+        <details open>
+            <summary>Plugin Metadata</summary>
+            <pre><code>
+    [Plugin Information]
+    PluginVersion = 5.1.0
+    PluginName = Bot Commands
+    PluginDescription = The Bot Commands plugin handles bot service functionality commands.
+    PluginLanguage = EN
+    PluginCommands: [
+                    "echo",
+                    "msg",
+                    "kickuser",
+                    "banuser",
+                    "muteuser",
+                    "unmuteuser",
+                    "deafenuser",
+                    "undeafenuser",
+                    "log",
+                    "showplugins",
+                    "aliassearch",
+                    "cmdsearch",
+                    "move",
+                    "makechannel",
+                    "makepermanentchannel",
+                    "leave",
+                    "removechannel",
+                    "renamechannel",
+                    "joinme",
+                    "joinuser",
+                    "moveuser",
+                    "showprivileges",
+                    "setprivileges",
+                    "addprivileges",
+                    "showblacklist",
+                    "blacklistuser",
+                    "whitelistuser"
+                    ]
+
+    [Plugin Settings]
+    ; List commands that need the core thread to wait for completion.
+    ; This may include processes that require multiple commands in succession.
+    ; For example: [Youtube Plugin - !yt -> !p] process requires 2 commands in that order.
+    ThreadWaitForCommands: []
+    UseSingleThread = False
+
+    [Plugin Type]
+    ControllablePlugin = False
+    AudioPlugin = False
+    ImagePlugin = False
+    CorePlugin = True
+    ExtensionPlugin = False
+            </code></pre>
+        </details>
+        </div>
+    </div>
+    <footer></footer>
+</body>
+</html>

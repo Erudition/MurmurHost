@@ -1,0 +1,17 @@
+{
+	"name": "Mumble",
+	"icons": [
+		{
+			"src": "#require('./favicon192px.png')",
+			"sizes": "192x192",
+			"type": "image\/png"
+		},
+		{
+			"src": "#require('./favicon512px.png')",
+			"sizes": "512x512",
+			"type": "image\/png"
+		}
+	],
+	"theme_color": "#ffffff",
+	"display": "standalone"
+}

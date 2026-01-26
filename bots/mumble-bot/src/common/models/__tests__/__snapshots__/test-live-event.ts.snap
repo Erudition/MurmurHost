@@ -1,0 +1,61 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`LiveEvent model constructs the expected object with arguments %s" 1`] = `LiveEvent {}`;
+
+exports[`LiveEvent model constructs the expected object with arguments cache add" 1`] = `
+LiveEvent {
+  "cachedAudio": Object {
+    "id": "some-id",
+  },
+  "event": "cache add",
+}
+`;
+
+exports[`LiveEvent model constructs the expected object with arguments cache remove" 1`] = `
+LiveEvent {
+  "cachedAudio": Object {
+    "id": "some-id",
+  },
+  "event": "cache remove",
+}
+`;
+
+exports[`LiveEvent model constructs the expected object with arguments init" 1`] = `
+LiveEvent {
+  "cachedAudios": undefined,
+  "event": "init",
+  "queue": Array [
+    Object {
+      "type": "sound",
+    },
+    Object {
+      "type": "sound",
+    },
+  ],
+}
+`;
+
+exports[`LiveEvent model constructs the expected object with arguments queue clear" 1`] = `
+LiveEvent {
+  "event": "queue clear",
+  "mumbleStatus": undefined,
+}
+`;
+
+exports[`LiveEvent model constructs the expected object with arguments queue push" 1`] = `
+LiveEvent {
+  "event": "queue push",
+  "queueItem": Object {
+    "type": "sound",
+  },
+}
+`;
+
+exports[`LiveEvent model constructs the expected object with arguments queue shift" 1`] = `
+LiveEvent {
+  "event": "queue shift",
+  "queueItem": Object {
+    "type": "sound",
+  },
+}
+`;

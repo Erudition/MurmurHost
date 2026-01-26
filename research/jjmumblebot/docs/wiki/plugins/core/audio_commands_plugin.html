@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <noscript>Please enable JavaScript in your browser!</noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.5.2/dist/lux/bootstrap.min.css" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="../../../js/insert_html.js"></script>
+    <link rel="stylesheet" href="../../../css/content-pages.css" crossorigin="anonymous">
+</head>
+<body>
+    <nav id="table_of_contents"></nav>
+    <div class="main-content">
+        <h2 id="page-title">Audio Commands Plugin</h2>
+        <p>This is a built-in core plugin that handles bot audio functionality commands.</p>
+
+        <h4>Usage:</h4>
+        <code>!audiostatus</code>: Shows the audio interface status.<br>
+        <code>!queue</code>: Displays the current audio tracks in the audio queue.<br>
+        <code>!playing</code>: Displays the current audio track and the duration of the track.<br>
+        <code>!pause</code>: Pauses the currently playing audio track.<br>
+        <code>!resume</code>: Resumes the currently paused audio track.<br>
+        <code>!stop</code>: Stops the currently playing audio track and clears the queue.<br>
+        <code>!loop</code>: Toggles looping for the current audio track.<br>
+        <code>!remove 'track_number'</code>: Remove a track from the audio queue by the track number.<br>
+        <code>!clear</code>: Clears all the audio tracks in the audio queue.<br>
+        <code>!replay</code>: Replays the currently playing audio track.<br>
+        <code>!shuffle</code>: Randomly shuffles the order of audio tracks in the audio queue.<br>
+        <code>!skip 'track_number'</code>: Skips ahead in the audio queue to the given track number. It skips to the next track in the queue if a track number is not provided.<br>
+        <code>!seek 'seconds'</code>: Skips ahead in the current audio track by the given number of seconds.<br>
+        <code>!volume/!v '0..1'</code>: Sets the bot audio volume.<br>
+        <code>!duckaudio</code>: Toggles the bot audio ducking feature.<br>
+        <code>!duckvolume '0..1'</code>: Sets the bot ducking audio volume.<br>
+        <code>!duckthreshold '0..1'</code>: Sets the bot ducking audio threshold.<br>
+        <code>!duckdelay '0..1'</code>: Sets the bot ducking audio delay before changing the volume back to the regular level.
+        <div>
+        <details open>
+            <summary>Plugin Metadata</summary>
+            <pre><code>
+    [Plugin Information]
+    PluginVersion = 5.2.0
+    PluginName = Audio Commands
+    PluginDescription = The Audio Commands plugin handles bot audio functionality commands.
+    PluginLanguage = EN
+    PluginCommands: [
+                    "audiostatus",
+                    "queue",
+                    "pause",
+                    "resume",
+                    "playing",
+                    "replay",
+                    "shuffle",
+                    "skip",
+                    "stop",
+                    "clear",
+                    "loop",
+                    "remove",
+                    "seek",
+                    "volume",
+                    "duckaudio",
+                    "duckvolume",
+                    "duckthreshold",
+                    "duckdelay"
+                    ]
+
+    [Plugin Settings]
+    ; List commands that need the core thread to wait for completion.
+    ; This may include processes that require multiple commands in succession.
+    ; For example: [Youtube Plugin - !yt -> !p] process requires 2 commands in that order.
+    ThreadWaitForCommands: []
+    UseSingleThread = False
+
+    [Plugin Type]
+    ControllablePlugin = False
+    AudioPlugin = False
+    ImagePlugin = False
+    CorePlugin = True
+    ExtensionPlugin = False
+            </code></pre>
+        </details>
+        </div>
+    </div>
+    <footer></footer>
+</body>
+</html>

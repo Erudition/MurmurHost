@@ -5,3 +5,44 @@ services:
       - "64738:64738"
       - "64738:64738/udp"
     restart: always
+    volumes:
+      - ./murmur.sqlite:/var/lib/mumble-server/mumble-server.sqlite
+      - ./murmur.ini:/etc/murmur.ini
+    environment:
+      - MUMBLE_CUSTOM_CONFIG_FILE=/etc/murmur.ini
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=botdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=botdb
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+
+  mumble-bot-soundboard:
+    build:
+      context: ./bots/mumble-bot
+      dockerfile: Dockerfile
+    image: mumble-bot-soundboard
+    ports:
+      - "23278:8080"
+    environment:
+      - DATABASE_URL=postgres://postgres:botdb@db:5432/botdb
+    volumes:
+      - ./bots/mumble-bot-config.yml:/bots/config.yml
+      - ./bots/sounds:/bots/sounds
+    depends_on:
+      - db
+      - murmur
+    restart: always
+
+  bots-legacy:
+    build: ./bots
+    network_mode: "service:murmur"
+    depends_on:
+      - murmur
+    restart: always
+    volumes:
+      - ./recordings:/bots/recordings
