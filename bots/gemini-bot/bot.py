@@ -24,10 +24,11 @@ SYSTEM_INSTRUCTION = (
     "You are a 'Podcast sidekick'. The hosts are Connor and Jordan. "
     "Your goal is to be a helpful, witty, and engaging assistant during the podcast. "
     "You will receive audio from the Mumble server. We will inform you who is currently producing audio with text tags like [Speaker: Name]. "
-    "CRITICAL: Use the name provided in the [Speaker: Name] tag to address the speaker. Do not guess or assume based on the previous turn. "
-    "Your response will be heard by everyone in the room. "
-    "You have tools available to send messages, move channels, and manage your own mute state. "
-    "Do not move to a channel containing the Echo Bot."
+    "CRITICAL: The [Speaker: Name] tag is metadata. DO NOT echo it or repeat it in your response. "
+    "Use the name inside the tag to address the speaker (e.g., 'Hey Connor...'). "
+    "Your response will be heard by everyone in the room as voice audio, UNLESS you are informed that you are 'SUPPRESSED'. "
+    "If you are SUPPRESSED, the server has blocked your voice. In this state, you should still process audio you hear, but respond via text chat using the 'send_channel_message' tool. "
+    "You have tools available to send messages, move channels, and manage your own mute state."
 )
 
 class MumbleGeminiBot:
@@ -45,10 +46,85 @@ class MumbleGeminiBot:
         self.is_running = True
         self.gemini_session = None
         self.humans_present = False
+        self.human_names = set()
+        self.is_suppressed = False
+        self.last_gemini_conn_time = time.time()
+        self.current_channel_id = None
         
+    def send_context(self, text):
+        """Sends a text turn to Gemini for real-time context."""
+        print(f"Context update: {text}")
+        try:
+            self.loop.call_soon_threadsafe(self.to_gemini_queue.put_nowait, f"[System: {text}]")
+        except: pass
+
     def mumble_connected(self):
         print(f"Connected to Mumble as {BOT_NAME}")
         self.mumble.users.myself.comment("Gemini AI Sidekick")
+        
+        # Initial humans check (careful, could be blocking)
+        self.update_humans()
+        
+        # Set initial state
+        self.current_channel_id = self.mumble.users.myself.get('channel_id')
+        self.check_suppression(self.mumble.users.myself)
+        
+        # Set up real-time callbacks
+        self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_USERUPDATED, self.user_updated)
+        self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_USERREMOVED, self.user_removed)
+        self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CHANNELUPDATED, self.channel_updated)
+        
+    def update_humans(self):
+        """Updates the list of humans present on the server."""
+        try:
+            all_users = list(self.mumble.users.values())
+            humans = [u.get('name') for u in all_users if u.get('name') not in [BOT_NAME, ECHO_BOT_NAME, "Recording"]]
+            self.human_names = set(filter(None, humans))
+            self.humans_present = len(self.human_names) > 0
+        except:
+            pass
+
+    def user_updated(self, user, updated):
+        """Handles user state changes (join, move, mute, etc.)"""
+        self.update_humans()
+        my_id = self.mumble.users.myself.get('session')
+        if user.get('session') == my_id:
+            # Self update
+            if 'channel_id' in updated:
+                new_chan = self.mumble.channels.get(updated['channel_id'])
+                self.current_channel_id = updated['channel_id']
+                members = [u.get('name') for u in self.mumble.users.values() if u.get('channel_id') == self.current_channel_id and u.get('session') != my_id]
+                self.send_context(f"You moved to channel '{new_chan.get('name') if new_chan else 'Unknown'}'. Other members: {', '.join(filter(None, members)) if members else 'None'}")
+                # Check suppression immediately on move
+                self.check_suppression(user)
+            
+            if 'mute' in updated or 'suppressed' in updated or 'self_mute' in updated:
+                self.check_suppression(user)
+        else:
+            # Other user update
+            if 'channel_id' in updated:
+                if updated['channel_id'] == self.current_channel_id:
+                    self.send_context(f"User {user.get('name')} joined your channel.")
+                elif user.get('old_channel_id') == self.current_channel_id:
+                    self.send_context(f"User {user.get('name')} left your channel.")
+
+    def user_removed(self, user):
+        """Handles user disconnection"""
+        self.update_humans()
+        if user.get('channel_id') == self.current_channel_id:
+            self.send_context(f"User {user.get('name')} disconnected.")
+
+    def channel_updated(self, channel, updated):
+        pass # Could track channel name changes etc.
+
+    def check_suppression(self, user):
+        """Updates suppression state and informs Gemini if it changes"""
+        # In Mumble, 'mute' or 'suppressed' usually means the server is blocking output.
+        suppressed = user.get('mute', False) or user.get('suppressed', False)
+        if suppressed != self.is_suppressed:
+            self.is_suppressed = suppressed
+            state = "SUPPRESSED (Voice blocked by server)" if suppressed else "UNSUPPRESSED (Voice enabled)"
+            self.send_context(f"You are now {state}")
 
     def sound_received(self, user, sound):
         if not self.gemini_session:
@@ -58,7 +134,9 @@ class MumbleGeminiBot:
             if not self.humans_present:
                 return
 
-        username = user['name']
+        username = user.get('name')
+        if not username:
+            return
         
         # Speaker identification
         if self.current_speaker != username:
@@ -109,11 +187,6 @@ class MumbleGeminiBot:
                         "name": "unmute_myself",
                         "description": "Ensure the bot is not self-muted or suppressed in Mumble.",
                         "parameters": {"type": "object", "properties": {}}
-                    },
-                    {
-                        "name": "check_room_status",
-                        "description": "List all users in the bot's current channel and their mute/deaf states.",
-                        "parameters": {"type": "object", "properties": {}}
                     }
                 ]
             }]
@@ -142,14 +215,21 @@ class MumbleGeminiBot:
                 
                 async with self.client.aio.live.connect(model=model_id, config=connect_config) as session:
                     self.gemini_session = session
+                    self.last_gemini_conn_time = time.time()
                     print("Gemini session established.")
+                    
+                    # Visually indicate we are hearing
+                    self.mumble.users.myself.self_deaf = False
                     
                     async def sender():
                         print("Sender task started.")
-                        # Clear stale audio on connection
-                        while not self.to_gemini_queue.empty():
-                            self.to_gemini_queue.get_nowait()
+                        # Clear stale audio on connection if it was down for > 10s
+                        if time.time() - self.last_gemini_conn_time > 10:
+                            print("Connection was down for > 10s. Flushing stale audio queue.")
+                            while not self.to_gemini_queue.empty():
+                                self.to_gemini_queue.get_nowait()
                             
+                        self.last_gemini_conn_time = time.time()
                         while self.gemini_session == session:
                             item = await self.to_gemini_queue.get()
                             try:
@@ -177,6 +257,9 @@ class MumbleGeminiBot:
                                     if parts:
                                         for part in parts:
                                             if part.inline_data:
+                                                if self.is_suppressed:
+                                                    # Do not output sound if suppressed
+                                                    continue
                                                 try:
                                                     resampled, _ = audioop.ratecv(part.inline_data.data, 2, 1, 24000, 48000, None)
                                                     self.mumble.sound_output.add_sound(resampled)
@@ -203,6 +286,10 @@ class MumbleGeminiBot:
             except Exception as e:
                 print(f"Gemini connection error: {e}")
                 self.gemini_session = None
+                # Visually indicate we are disconnected/not hearing
+                try:
+                    self.mumble.users.myself.self_deaf = True
+                except: pass
                 await asyncio.sleep(5)
 
     async def handle_tool_call(self, call):
@@ -211,9 +298,12 @@ class MumbleGeminiBot:
         print(f"Executing tool: {name} with args {args}")
         try:
             if name == "send_channel_message":
-                chan_id = self.mumble.users.myself['channel_id']
-                self.mumble.channels.get(chan_id).send_text_message(args['message'])
-                return {"status": "success"}
+                chan_id = self.mumble.users.myself.get('channel_id')
+                chan = self.mumble.channels.get(chan_id)
+                if chan:
+                    chan.send_text_message(args['message'])
+                    return {"status": "success"}
+                return {"error": "Channel not found"}
             elif name == "send_private_message":
                 user = self.mumble.users.find_by_name(args['user_name'])
                 if user:
@@ -227,32 +317,17 @@ class MumbleGeminiBot:
                 
                 # Check for Echo bot in target channel
                 for u in self.mumble.users.values():
-                    if u['name'] == ECHO_BOT_NAME and u['channel_id'] == target['channel_id']:
+                    if u.get('name') == ECHO_BOT_NAME and u.get('channel_id') == target.get('channel_id'):
                         return {"error": "Cannot move to a channel containing the Echo Bot"}
                         
-                self.mumble.channels[target['channel_id']].move_in()
+                self.mumble.channels[target.get('channel_id')].move_in()
                 return {"status": "success"}
             elif name == "unmute_myself":
                 self.mumble.users.myself.unmute()
                 self.mumble.users.myself.undeaf()
-                # self_mute/self_deaf are also things
                 self.mumble.users.myself.self_mute = False
                 self.mumble.users.myself.self_deaf = False
                 return {"status": "success", "message": "Bot unmuted and undeafened."}
-            elif name == "check_room_status":
-                my_chan = self.mumble.users.myself.get('channel_id')
-                users = []
-                for u in self.mumble.users.values():
-                    if u.get('channel_id') == my_chan:
-                        users.append({
-                            "name": u.get('name'),
-                            "mute": u.get('mute'),
-                            "deaf": u.get('deaf'),
-                            "self_mute": u.get('self_mute'),
-                            "self_deaf": u.get('self_deaf'),
-                            "suppressed": u.get('suppressed', False)
-                        })
-                return {"channel_id": my_chan, "users": users}
         except Exception as e:
             return {"error": str(e)}
         return {"error": "Function not implemented"}
@@ -265,46 +340,37 @@ class MumbleGeminiBot:
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CONNECTED, self.mumble_connected)
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)
         self.mumble.start()
-        print("Waiting for Mumble to be ready...")
-        self.mumble.is_ready()
-        print("Mumble is ready.")
+        
+        print("Waiting for Mumble to be ready (blocking call)...", flush=True)
+        await asyncio.to_thread(self.mumble.is_ready)
+        
+        print("Mumble is ready. Setting up audio...", flush=True)
         self.mumble.set_receive_sound(True)
         
-        print("Starting Gemini loop task...")
-        asyncio.create_task(self.run_gemini_loop())
+        print("Starting Gemini loop task...", flush=True)
+        self.gemini_task = asyncio.create_task(self.run_gemini_loop())
         
-        print("Entering main state monitoring loop...")
+        print("Entering main state monitoring loop...", flush=True)
         
         while self.is_running:
-            # Filter humans: skip PodBot, Echo, and Recording bot
-            all_users = list(self.mumble.users.values())
-            # print(f"DEBUG: All users seen: {[u['name'] for u in all_users]}")
-            humans = [u for u in all_users if u['name'] not in [BOT_NAME, ECHO_BOT_NAME, "Recording"]]
-            self.humans_present = len(humans) > 0
-            
-            if self.humans_present:
-                # print(f"Humans detected: {[u['name'] for u in humans]}")
-                # Only auto-join Audience if we are currently "outside" (in the root channel)
-                if self.mumble.users.myself['channel_id'] == 0:
-                    target = self.mumble.channels.find_by_name(AUDIENCE_CHANNEL)
-                    if target:
-                        print(f"Humans present ({[u['name'] for u in humans]}). Moving to {AUDIENCE_CHANNEL}")
-                        self.mumble.channels[target['channel_id']].move_in()
-            if not self.humans_present:
-                # No humans, move back to root if not already there
-                if self.mumble.users.myself['channel_id'] != 0:
-                    print("No humans present. Leaving Audience channel.")
-                    self.mumble.channels[0].move_in()
-            
-            # Periodic health check: ensure we aren't suppressed if humans are present
-            if self.humans_present and (self.mumble.users.myself.get('mute') or self.mumble.users.myself.get('self_mute')):
-                # Don't auto-unmute if we were moved outside by a manager, but if we are in one of our target channels...
-                my_chan_id = self.mumble.users.myself.get('channel_id')
-                my_chan = self.mumble.channels.get(my_chan_id)
-                if my_chan and (my_chan['name'] == AUDIENCE_CHANNEL or "Stage" in my_chan['name']):
-                    print("Bot appears muted/suppressed while in active channel. Attempting to unmute...")
-                    self.mumble.users.myself.unmute()
-                    self.mumble.users.myself.self_mute = False
+            try:
+                print(f"MAIN LOOP TICK | Humans: {self.humans_present} ({list(self.human_names)})", flush=True)
+                
+                my_user = self.mumble.users.myself
+                my_chan_id = my_user.get('channel_id')
+
+                if self.humans_present:
+                    if my_chan_id == 0:
+                        target = self.mumble.channels.find_by_name(AUDIENCE_CHANNEL)
+                        if target:
+                            print(f"Auto-moving to {AUDIENCE_CHANNEL}", flush=True)
+                            self.mumble.channels[target.get('channel_id')].move_in()
+                else:
+                    if my_chan_id != 0:
+                        print("No humans, returning to root", flush=True)
+                        self.mumble.channels[0].move_in()
+            except Exception as e:
+                print(f"Main Loop Error: {e}", flush=True)
                 
             await asyncio.sleep(5)
 
