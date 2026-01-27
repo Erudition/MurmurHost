@@ -1,5 +1,7 @@
 # Database Data
 postgres_data/
+nextcloud_data/
+nextcloud_db/
 murmur.sqlite
 murmur.sqlite.bak
 murmur.sqlite.new
