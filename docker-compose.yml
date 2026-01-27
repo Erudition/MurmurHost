@@ -40,6 +40,7 @@ services:
     restart: always
     environment:
       - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
     networks:
       - podcast-net
 
