@@ -33,6 +33,16 @@ services:
     networks:
       - podcast-net
 
+  gemini-bot:
+    build: ./bots/gemini-bot
+    depends_on:
+      - murmur
+    restart: always
+    environment:
+      - MUMBLE_HOST=murmur
+    networks:
+      - podcast-net
+
   db-nextcloud:
     image: mariadb:10.11
     restart: always
