@@ -84,7 +84,7 @@ class MumbleGeminiBot:
         except:
             pass
 
-    def user_updated(self, user, updated):
+    def user_updated(self, user, updated, **kwargs):
         """Handles user state changes (join, move, mute, etc.)"""
         self.update_humans()
         my_id = self.mumble.users.myself.get('session')
@@ -108,13 +108,13 @@ class MumbleGeminiBot:
                 elif user.get('old_channel_id') == self.current_channel_id:
                     self.send_context(f"User {user.get('name')} left your channel.")
 
-    def user_removed(self, user):
+    def user_removed(self, user, *args, **kwargs):
         """Handles user disconnection"""
         self.update_humans()
         if user.get('channel_id') == self.current_channel_id:
             self.send_context(f"User {user.get('name')} disconnected.")
 
-    def channel_updated(self, channel, updated):
+    def channel_updated(self, channel, updated, **kwargs):
         pass # Could track channel name changes etc.
 
     def check_suppression(self, user):
@@ -354,8 +354,6 @@ class MumbleGeminiBot:
         
         while self.is_running:
             try:
-                print(f"MAIN LOOP TICK | Humans: {self.humans_present} ({list(self.human_names)})", flush=True)
-                
                 my_user = self.mumble.users.myself
                 my_chan_id = my_user.get('channel_id')
 
@@ -363,11 +361,11 @@ class MumbleGeminiBot:
                     if my_chan_id == 0:
                         target = self.mumble.channels.find_by_name(AUDIENCE_CHANNEL)
                         if target:
-                            print(f"Auto-moving to {AUDIENCE_CHANNEL}", flush=True)
+                            print(f"Humans present. Auto-moving to {AUDIENCE_CHANNEL}", flush=True)
                             self.mumble.channels[target.get('channel_id')].move_in()
                 else:
                     if my_chan_id != 0:
-                        print("No humans, returning to root", flush=True)
+                        print("No humans present. Returning to root channel.", flush=True)
                         self.mumble.channels[0].move_in()
             except Exception as e:
                 print(f"Main Loop Error: {e}", flush=True)
