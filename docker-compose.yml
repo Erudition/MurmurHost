@@ -23,24 +23,23 @@ services:
     networks:
       - podcast-net
 
-  bots-legacy:
+  custom-bots:
     build: ./bots
-    depends_on:
-      - murmur
-    restart: always
-    volumes:
-      - ./recordings:/bots/recordings
-    networks:
-      - podcast-net
-
-  gemini-bot:
-    build: ./bots/gemini-bot
-    depends_on:
-      - murmur
-    restart: always
+    container_name: custom-bots
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
+      - GEMINI_API_KEY=AIzaSyA_Yjb6fnN0FkFEIIXUc7hh-CXVXYmkB9c
+    volumes:
+      - ./recordings:/bots/recordings
+      - ./bots/supervisor_bot.py:/bots/supervisor_bot.py
+      - ./bots/echobot.py:/bots/echobot.py
+      - ./bots/opus_recorder.py:/bots/opus_recorder.py
+      - ./bots/test_bot.py:/bots/test_bot.py
+      - ./bots/gemini-bot:/bots/gemini-bot
+    restart: unless-stopped
+    depends_on:
+      - murmur
     networks:
       - podcast-net
 
