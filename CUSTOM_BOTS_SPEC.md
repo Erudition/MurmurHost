@@ -92,10 +92,12 @@ High-fidelity session recorder that captures individual user streams. Sits in th
 ## 🤖 Gemini Live AI Bot (`gemini-bot/bot.py`)
 AI interaction bot powered by Gemini Live API.
 
-- **Name**: Always "Benny Botman" (formerly PodBot)
+- **Name**: Always "Benny Botman"
 - **Core Model**: `gemini-2.5-flash-native-audio-preview-12-2025`.
 - **Voice**: `Fenrir`
 - **API Configuration**:
+    - Must use `v1beta`
+    - Audio must be downsampled to 16k
     - Audio Transcripts:
         - `output_audio_transcription`: Enabled.
         - `input_audio_transcription`: Enabled.
@@ -236,3 +238,28 @@ Unless explicitly specified, bot logic should rely on user permissions in a chan
     - Hallway: Hallway 🖉
         - Parent only - Cannot be directly occupied
         - Used to contain temporary channels - any user can create temporary channels
+# Test Procedures
+
+These procedures define the standard verification suite for Benny Bot stability and feature compliance.
+
+## 🟢 Multi-Turn Baseline Test (`multi_turn_test.py`)
+This test verifies the stability of the Gemini Live API connection, VAD responsiveness, and context retention across multiple interactions.
+
+- **Environment**: AI Test Room (Temporary channel in Hallway).
+- **Participants**: 
+    - `BennyBot`: The bot under test (launched via the script using `v1beta` API).
+    - `TestDriver`: A simulated human that plays audio clips.
+- **Workflow**:
+    - **Turn 1**: The Driver plays `hey-benny-can-you-hear-me.opus`.
+    - **Turn 2**: The Driver plays `hey-benny-name-all-the-channels.opus`.
+    - **Turn 3**: The Driver plays `create-a-channel-then-move-to-it.opus`.
+    - **Event-Driven Execution**:
+        - **Detection**: The test suite monitors `BennyBot`'s transmission status in Mumble for each turn.
+        - **Response**: The test suite MUST see audio being transmitted from `BennyBot`'s client. 
+            - **Timeout**: If no audio is transmitted within 30 seconds of the trigger, the test fails immediately.
+        - **Turn Progression**: The next clip in the sequence is played IMMEDIATELY after `BennyBot` stops transmitting. No fixed timers or sleeps are used between turns.
+- **Success Criteria**:
+    - "Turn Complete" signal received from Gemini for all 3 turns.
+    - Successful audio transmission detected in Mumble for every turn.
+    - No WebSocket disconnections (1008 or 1007 errors).
+    - Clear transcription log of model responses.

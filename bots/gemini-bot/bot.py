@@ -28,7 +28,7 @@ class MumbleGeminiBot:
     def __init__(self):
         self.api_key = API_KEY
         self.mumble = None
-        self.client = genai.Client(api_key=self.api_key, http_options={'api_version': 'v1alpha'})
+        self.client = genai.Client(api_key=self.api_key, http_options={'api_version': 'v1beta'})
         self.to_gemini_queue = asyncio.Queue(maxsize=2000)
         self.is_running = True
         self.gemini_session = None
@@ -210,7 +210,6 @@ class MumbleGeminiBot:
                 },
                 "output_audio_transcription": {},
                 "input_audio_transcription": {},
-                "enable_affective_dialog": True,
             })
 
             if self.resumption_token:
@@ -527,7 +526,7 @@ class MumbleGeminiBot:
                 # Room Presence Logic (as per spec)
                 # Benny can be in: Studio subrooms OR Hallway descendants
                 # Studio subrooms: Audience, Backstage, Stage (NOT Mic Check)
-                studio_system = [STUDIO_CHANNEL, AUDIENCE_CHANNEL, "Backstage 🤐", STAGE_CHANNEL]
+                studio_system = [STUDIO_CHANNEL, "Backstage 🤐", STAGE_CHANNEL]
                 
                 # Check occupancy of studio system + Hallway (Recursive)
                 studio_occupied = False
