@@ -100,8 +100,6 @@ AI interaction bot powered by Gemini Live API.
         - `output_audio_transcription`: Enabled.
         - `input_audio_transcription`: Enabled.
         - Agent should refer to logs when testing to confirm conversation responses.
-    - `enable_affective_dialog`: Enabled for natural speech patterns.
-    - `proactive_audio`: Allow the model to decide not to respond. Important for when humans are talking to each other rather than to the bot.
 - **Agent Tools**:
     - Change channel tool:
         - Always available
