@@ -4,6 +4,8 @@ This document outlines the technical specifications and requirements for the cus
 
 
 ## Bot Presence
+- All presence (and mute status) logic should be Event-driven
+    - Do NOT create constant polling loops to check status unless events are confirmed to be unavailable
 - **Supervisor Presence**:
     - Room: Root
         - When moved, return to Root immediately
