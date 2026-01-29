@@ -6,6 +6,7 @@ import collections
 from google import genai
 from google.genai import types
 from google.genai import errors as genai_errors
+import tools
 
 # --- CONFIGURATION ---
 MODEL_ID = "models/gemini-2.5-flash-native-audio-preview-12-2025"
@@ -44,52 +45,7 @@ class GeminiLiveIntegration:
     async def connect_live_api(self, modality):
         self.log(f"Connecting to Gemini Live API (Modality: {modality})...")
         
-        tools = [
-            {"function_declarations": [
-                {
-                    "name": "mute_self",
-                    "description": "Mute the bot's own microphone. Use this when finished speaking or when the conversation should be private.",
-                },
-                {
-                    "name": "unmute_self",
-                    "description": "Unmute the bot's own microphone. Use this to start speaking or responding to users.",
-                },
-                {
-                    "name": "change_room",
-                    "description": "Move to a different Mumble channel.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "channel_name": {"type": "string", "description": "The name of the channel to move to."}
-                        },
-                        "required": ["channel_name"]
-                    }
-                },
-                {
-                    "name": "send_room_message",
-                    "description": "Send a text message to the current room.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "message": {"type": "string", "description": "The text message to send."}
-                        },
-                        "required": ["message"]
-                    }
-                },
-                {
-                    "name": "send_direct_message",
-                    "description": "Send a private text message to a specific user.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "username": {"type": "string", "description": "The name of the user to message."},
-                            "message": {"type": "string", "description": "The text message to send."}
-                        },
-                        "required": ["username", "message"]
-                    }
-                }
-            ]}
-        ]
+        tools_def = tools.get_tools_definition()
 
         try:
             # Clean up old session/tasks if any
@@ -101,7 +57,7 @@ class GeminiLiveIntegration:
             config = {
                 "response_modalities": [modality],
                 "system_instruction": self.get_system_prompt(),
-                "tools": tools,
+                "tools": tools_def,
             }
             
             # Always include AUDIO config for stability
@@ -272,43 +228,11 @@ class GeminiLiveIntegration:
             self.handle_disconnect()
 
     async def handle_tool_call(self, call):
-        name = call.name
-        args = call.args
-        id = call.id
-        self.log(f"Tool Call: {name}({args})")
-        
-        result = "Success"
-        try:
-            if name == "mute_self":
-                self.mumble.users.myself.mute()
-            elif name == "unmute_self":
-                self.mumble.users.myself.unmute()
-            elif name == "change_room":
-                target = self.mumble.channels.find_by_name(args["channel_name"])
-                if target:
-                    self.mumble.channels[target["channel_id"]].move_in()
-                else:
-                    result = f"Error: Channel {args['channel_name']} not found."
-            elif name == "send_room_message":
-                chan = self.mumble.channels.get(self.mumble.users.myself['channel_id'])
-                chan.send_text_message(f"<b>{self.bot_name}:</b> {args['message']}")
-            elif name == "send_direct_message":
-                target_user = None
-                for u in self.mumble.users.values():
-                    if u['name'] == args['username']:
-                        target_user = u
-                        break
-                if target_user:
-                    target_user.send_text_message(f"<b>(Private) {self.bot_name}:</b> {args['message']}")
-                else:
-                    result = f"Error: User {args['username']} not found."
-        except Exception as e:
-            result = f"Error: {e}"
-
+        result = await tools.dispatch_tool_call(self, call)
         # Send tool response
         if self.gemini_session:
             await self.gemini_session.send(input=types.LiveClientToolResponse(
                 function_responses=[types.LiveClientFunctionResponse(
-                    name=name, id=id, response={"result": result}
+                    name=call.name, id=call.id, response={"result": result}
                 )]
             ))
