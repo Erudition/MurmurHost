@@ -526,7 +526,7 @@ class MumbleGeminiBot:
                 # Room Presence Logic (as per spec)
                 # Benny can be in: Studio subrooms OR Hallway descendants
                 # Studio subrooms: Audience, Backstage, Stage (NOT Mic Check)
-                studio_system = [STUDIO_CHANNEL, "Backstage 🤐", STAGE_CHANNEL]
+                studio_system = [STUDIO_CHANNEL, AUDIENCE_CHANNEL, "Backstage 🤐", STAGE_CHANNEL]
                 
                 # Check occupancy of studio system + Hallway (Recursive)
                 studio_occupied = False
@@ -575,17 +575,33 @@ class MumbleGeminiBot:
                             parent_id = curr.get('parent')
                             curr = self.mumble.channels.get(parent_id) if parent_id is not None else None
 
+                    # Correct Presence Priority Logic:
+                    # 1. AI Test Room (if exists and human is present)
+                    # 2. Studio System (Stage, Backstage, Audience)
+                    # 3. Hallway
+                    
+                    in_studio = my_chan['name'] in studio_system
+                    in_test = my_chan['name'].startswith("AI Test")
+                    
                     # Shall never join a room with Echo Bot (Mic Check)
                     if my_chan['name'] == MIC_CHECK_CHANNEL:
                         self.log("Spec Violation: Benny in Mic Check with Echo! Moving to Audience...")
                         target = self.mumble.channels.find_by_name(AUDIENCE_CHANNEL)
-                        if target:
-                            self.mumble.users.myself.move_in(target['channel_id'])
+                        if target: self.mumble.users.myself.move_in(target['channel_id'])
                     
-                    # If outside the Studio system AND not in a test room AND not in Hallway, move to Audience
-                    elif my_chan['name'] not in studio_system and not my_chan['name'].startswith("AI Test") and not is_in_hallway:
-                         target = self.mumble.channels.find_by_name(AUDIENCE_CHANNEL)
-                         if target:
+                    # If AI Test Room exists and we are not in it AND not in the Studio System, move to it.
+                    # This ensures Benny goes to the test room if it's created while he's idle/in audience.
+                    elif not in_test and not in_studio and not is_in_hallway:
+                         target = None
+                         try:
+                             target = self.mumble.channels.find_by_name(AI_TEST_ROOM)
+                         except: pass
+                         
+                         if not target: 
+                             target = self.mumble.channels.find_by_name(AUDIENCE_CHANNEL)
+                         
+                         if target and target['channel_id'] != my_chan['channel_id']:
+                             self.log(f"Auto-Move: {my_chan['name']} is not the target. Moving to {target['name']}...")
                              self.mumble.users.myself.move_in(target['channel_id'])
                         
                 # Force undeafen if we want to hear

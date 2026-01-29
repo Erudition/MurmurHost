@@ -64,11 +64,7 @@ class SupervisorBot:
         import re
         text = re.sub('<[^<]+?>', '', msg.message).strip()
         
-        if text == "!test":
-            # Create AI Test Room and move Benny there
-            self.create_test_room_and_move_benny()
-            
-        elif text.startswith("!verify_user "):
+        if text.startswith("!verify_user "):
             # Trusted bot reporting verification
             # Security: In a real app we'd verify the sender is Echo, but here checking name/cert is enough or loose trust
             # For now, just trust it.
@@ -80,40 +76,6 @@ class SupervisorBot:
             # Find user object
             pass
     
-    def create_test_room_and_move_benny(self):
-        """Creates AI Test Room under Hallway and moves Benny there"""
-        try:
-            hallway = self.mumble.channels.find_by_name("Hallway 🖉")
-            if not hallway:
-                print("Supervisor: Hallway not found")
-                return
-            
-            # Check if AI Test Room already exists
-            ai_test = None
-            for c in self.mumble.channels.values():
-                if c.get('name') == 'AI Test Room':
-                    ai_test = c
-                    break
-            
-            if not ai_test:
-                print("Supervisor: Creating AI Test Room...")
-                self.mumble.channels.new_channel(hallway['channel_id'], 'AI Test Room', temporary=True)
-                time.sleep(1)
-                for c in self.mumble.channels.values():
-                    if c.get('name') == 'AI Test Room':
-                        ai_test = c
-                        break
-            
-            if ai_test:
-                print(f"Supervisor: AI Test Room ready (ID: {ai_test['channel_id']})")
-                # Move Benny there
-                for u in self.mumble.users.values():
-                    if u['name'] == 'Benny Botman':
-                        print("Supervisor: Moving Benny to AI Test Room...")
-                        u.move_in(ai_test['channel_id'])
-                        break
-        except Exception as e:
-            print(f"Supervisor: Error creating test room: {e}")
 
 
 

@@ -1,147 +1,169 @@
 import asyncio
 import os
 import time
-import audioop
 import subprocess
 import pymumble_py3 as pymumble
-from google import genai
-from google.genai import types
+from pymumble_py3.errors import UnknownChannelError
 
 # --- CONFIG ---
-API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL_ID = "models/gemini-2.5-flash-native-audio-preview-12-2025"
-MUMBLE_HOST = "murmur"
+MUMBLE_HOST = os.getenv("MUMBLE_HOST", "murmur")
+BOT_UNDER_TEST = "Benny Botman"
+DRIVER_NAME = "Live Voice Test"
+TEST_ROOM = "AI Test Room"
+CERT = "/bots/certs/tester.pem"
+KEY = "/bots/certs/tester_key.pem"
 
-class MultiTurnTester:
+class MultiTurnDriver:
     def __init__(self):
-        self.transcripts = []
-        self.benny_ready = asyncio.Event()
-        self.current_turn_done = asyncio.Event()
+        self.mumble = None
+        self.benny_user = None
 
-    async def run_benny(self):
-        print(f"[Benny] Starting client with token len: {len(API_KEY) if API_KEY else 'NONE'}...")
-        client = genai.Client(api_key=API_KEY, http_options={'api_version': 'v1alpha'})
+    async def connect(self):
+        print(f"[System] Connecting {DRIVER_NAME} to {MUMBLE_HOST} using {CERT}...")
+        self.mumble = pymumble.Mumble(MUMBLE_HOST, DRIVER_NAME, port=64738, certfile=CERT, keyfile=KEY)
+        self.mumble.start()
+        await asyncio.to_thread(self.mumble.is_ready)
+        self.mumble.users.myself.unmute()
+        self.mumble.set_receive_sound(True)
+        print(f"[System] {DRIVER_NAME} connected.")
+
+    async def ensure_test_room(self):
+        print(f"[System] Ensuring {TEST_ROOM} exists...")
         
-        config = {"generation_config": {
-            "response_modalities": ["AUDIO"],
-            "speech_config": {"voice_config": {"prebuilt_voice_config": {"voice_name": "Fenrir"}}}
-        }}
-
+        # 1. Find Hallway
+        hallway = next((c for c in self.mumble.channels.values() if "Hallway" in c.get("name", "")), None)
+        if not hallway:
+            print("[Error] Hallway channel not found!")
+            return None
+        
+        # 2. Check/Create Test Room
+        ai_test_id = None
         try:
-            print("[Benny] Initiating Gemini connect...")
-            async with client.aio.live.connect(model=MODEL_ID, config=config) as session:
-                print("[Benny] Gemini session connected successfully.")
-                self.session = session
-                
-                # Start receiver
-                receiver_task = asyncio.create_task(self.receiver_loop())
-                self.benny_ready.set()
-                
-                # Simple sender loop for bytes
-                self.queue = asyncio.Queue()
-                while True:
-                    try:
-                        item = await asyncio.wait_for(self.queue.get(), timeout=5.0)
-                        await self.session.send_realtime_input(media=types.Blob(data=item, mime_type="audio/pcm;rate=16000"))
-                    except asyncio.TimeoutError:
-                        # Keep-alive
-                        await self.session.send_realtime_input(media=types.Blob(data=b'\x00'*3200, mime_type="audio/pcm;rate=16000"))
-        except Exception as e:
-            print(f"[Benny] Gemini error: {e}")
-        finally:
-            print("[Benny] Client/session closed.")
+            ai_test = self.mumble.channels.find_by_name(TEST_ROOM)
+            ai_test_id = ai_test['channel_id']
+            print(f"[System] Found existing {TEST_ROOM} (ID: {ai_test_id}).")
+        except UnknownChannelError:
+            print(f"[System] Creating {TEST_ROOM} under Hallway (ID: {hallway['channel_id']})...")
+            # Create as temporary so it cleans up if the test crashes
+            self.mumble.channels.new_channel(hallway['channel_id'], TEST_ROOM, temporary=True)
+            await asyncio.sleep(2)
+            try:
+                ai_test = self.mumble.channels.find_by_name(TEST_ROOM)
+                ai_test_id = ai_test['channel_id']
+                print(f"[System] Successfully created {TEST_ROOM} (ID: {ai_test_id}).")
+            except UnknownChannelError:
+                print(f"[Error] Failed to find {TEST_ROOM} after creation!")
+                return None
 
-    async def receiver_loop(self):
-        async for msg in self.session.receive():
-            if msg.server_content and msg.server_content.model_turn:
-                for part in msg.server_content.model_turn.parts:
-                    if part.text:
-                        print(f"[Gemini Response] {part.text}")
-                        self.transcripts.append(part.text)
-            if msg.server_content and msg.server_content.turn_complete:
-                print("[Benny] Turn complete.")
-                self.current_turn_done.set()
+        # 3. Move self to the room
+        self.mumble.users.myself.move_in(ai_test_id)
+        return ai_test_id
 
-    def sound_received(self, user, sound):
-        if user['name'] == "TestDriver":
-            pcm = sound.pcm
-            resampled = audioop.ratecv(pcm, 2, 1, 48000, 16000, None)[0]
-            self.queue.put_nowait(resampled)
+    async def wait_for_benny(self, target_channel_id):
+        print(f"[System] Waiting for {BOT_UNDER_TEST} to join {TEST_ROOM}...")
+        for i in range(45):
+            benny = next((u for u in self.mumble.users.values() if u['name'] == BOT_UNDER_TEST), None)
+            if benny and benny['channel_id'] == target_channel_id:
+                self.benny_user = benny
+                print(f"[System] {BOT_UNDER_TEST} has arrived.")
+                return True
+            if i % 10 == 0:
+                print(f"[System] Still waiting for {BOT_UNDER_TEST}...")
+            await asyncio.sleep(1)
+        return False
 
-    async def check_certs(self):
-        for base, p in [("test", "/tmp/test_cert.pem"), ("test2", "/tmp/test_cert_2.pem")]:
-            key_p = p.replace(".pem", "_key.pem")
-            if not os.path.exists(p) or not os.path.exists(key_p):
-                print(f"[System] Generating {p} and {key_p}...")
-                subprocess.run([
-                    "openssl", "req", "-x509", "-newkey", "rsa:2048", 
-                    "-keyout", key_p, "-out", p, 
-                    "-days", "1", "-nodes", "-subj", f"/CN={base}"
-                ], check=True, capture_output=True)
-            else:
-                print(f"[System] Certs exist: {p}, {key_p}")
+    def play_clip(self, filename):
+        path = f"/bots/test-speech-clips/{filename}"
+        print(f"[Driver] Playing {filename}...")
+        cmd = ["ffmpeg", "-i", path, "-f", "s16le", "-ac", "1", "-ar", "48000", "-"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        
+        while True:
+            data = proc.stdout.read(1920)
+            if not data: break
+            self.mumble.sound_output.add_sound(data)
+            time.sleep(0.015)
+        proc.wait()
 
     async def run_test(self):
-        await self.check_certs()
-        print("[System] Connecting Benny to Mumble...")
-        m_benny = pymumble.Mumble(MUMBLE_HOST, "BennyBot", port=64738, 
-                                  certfile="/tmp/test_cert.pem", keyfile="/tmp/test_cert_key.pem")
-        m_benny.start()
-        m_benny.is_ready()
-        m_benny.users.myself.deaf = False
-        m_benny.users.myself.mute = False
-        m_benny.callbacks.set_callback(pymumble.constants.PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)
+        await self.connect()
         
-        print("[System] Connecting TestDriver to Mumble...")
-        m_driver = pymumble.Mumble(MUMBLE_HOST, "TestDriver", port=64738,
-                                   certfile="/tmp/test_cert_2.pem", keyfile="/tmp/test_cert_2_key.pem")
-        m_driver.start()
-        m_driver.is_ready()
-        m_driver.users.myself.mute = False
-
-        # Join room
-        target_chan = list(m_benny.channels.values())[0]['channel_id']
-        for c in m_benny.channels.values():
-            if c['name'] == 'AI Test Room': target_chan = c['channel_id']; break
+        tid = await self.ensure_test_room()
+        if tid is None: return False
         
-        m_benny.users.myself.move_in(target_chan)
-        m_driver.users.myself.move_in(target_chan)
-        
-        # Start Gemini
-        benny_task = asyncio.create_task(self.run_benny())
-        await self.benny_ready.wait()
+        if not await self.wait_for_benny(tid):
+            print(f"[FAIL] {BOT_UNDER_TEST} did not join {TEST_ROOM}.")
+            return False
 
-        def play_sync(file):
-            print(f"[Driver] Playing {file}...")
-            proc = subprocess.Popen(["ffmpeg", "-i", "/bots/test-speech-clips/" + file, "-f", "s16le", "-ac", "1", "-ar", "48000", "-"],
-                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-            while True:
-                data = proc.stdout.read(1920)
-                if not data: break
-                m_driver.sound_output.add_sound(data)
-                time.sleep(0.015)
-            proc.wait()
+        clips = [
+            "hey-benny-can-you-hear-me.opus",
+            "hey-benny-name-all-the-channels.opus",
+            "create-a-channel-then-move-to-it.opus"
+        ]
 
-        clips = ["hey-benny-can-you-hear-me.opus", "hey-benny-can-you-move-rooms.opus", "check-check-123.opus"]
         for i, clip in enumerate(clips):
-            print(f"-- TURN {i+1} --")
-            self.current_turn_done.clear()
-            play_sync(clip)
-            print("[System] Waiting for response...")
-            try:
-                await asyncio.wait_for(self.current_turn_done.wait(), timeout=30)
-            except:
-                print("[System] Turn timeout, moving to next.")
-            time.sleep(2)
+            print(f"\n--- TURN {i+1}: {clip} ---")
+            self.play_clip(clip)
 
-        print("\n=== FINAL TRANSCRIPTS ===")
-        for t in self.transcripts:
-            print(f"- {t}")
-        
-        m_benny.stop()
-        m_driver.stop()
-        benny_task.cancel()
+            print(f"[System] Monitoring {BOT_UNDER_TEST} for response...")
+            start_wait = time.time()
+            responded = False
+            
+            while time.time() - start_wait < 30:
+                sid = self.benny_user['session']
+                u = self.mumble.users.get(sid)
+                
+                # Check sound state robustly
+                is_sc = u.sound.is_sound() if u else False
+                is_sp = u.get('is_speaking', False) if u else False
+                
+                if u and (is_sp or is_sc):
+                    print(f"[System] {BOT_UNDER_TEST} started speaking (Sound={is_sc}, Speak={is_sp})")
+                    # Wait for silence
+                    silence_start = None
+                    last_debug = time.time()
+                    while True:
+                        await asyncio.sleep(0.02) # Faster polling for draining
+                        u = self.mumble.users.get(sid)
+                        
+                        # IMPORTANT: We MUST drain the sound buffer or is_sound stays True
+                        if u and u.sound.is_sound():
+                            u.sound.get_sound() # Drain and discard
+                        
+                        sc = u.sound.is_sound() if u else False
+                        sp = u.get('is_speaking', False) if u else False
+                        
+                        if time.time() - last_debug > 2.0:
+                             print(f"  [Silence Loop] Sound={sc}, Speak={sp}, SilenceTime={0 if silence_start is None else time.time() - silence_start:.1f}s")
+                             last_debug = time.time()
+
+                        if not u or not (sc or sp):
+                             if silence_start is None:
+                                 silence_start = time.time()
+                             elif time.time() - silence_start > 1.2: # 1.2s of solid silence
+                                 break
+                        else:
+                             silence_start = None
+                    
+                    print(f"[System] {BOT_UNDER_TEST} finished speaking.")
+                    responded = True
+                    break
+                await asyncio.sleep(0.1)
+
+            if not responded:
+                print(f"[FAIL] {BOT_UNDER_TEST} failed to respond.")
+                return False
+            
+            await asyncio.sleep(1.0)
+
+        print("\n\u2705 MULTI-TURN TEST PASSED")
+        return True
 
 if __name__ == "__main__":
-    tester = MultiTurnTester()
-    asyncio.run(tester.run_test())
+    driver = MultiTurnDriver()
+    try:
+        if not asyncio.run(driver.run_test()):
+            exit(1)
+    finally:
+        if driver.mumble:
+            driver.mumble.stop()
