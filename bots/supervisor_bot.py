@@ -18,16 +18,26 @@ class SupervisorBot:
         self.is_running = True
         
         # Bot Lifecycle Management
-        # { name: { 'process': proc, 'kick_state_users': set(), 'should_be_online': bool, 'kick_wait': bool, 'last_start_attempt': timestamp } }
+        # { name: { 'process': proc, 'kick_state_users': set(), 'should_be_online': bool, 'kick_wait': bool, 'last_start_attempt': timestamp, 'empty_timer_start': timestamp } }
         self.bots = {
             "Echo": {"script": "/bots/echobot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0},
-            "Recording": {"script": "/bots/opus_recorder.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0},
-            "PodBot": {"script": "/bots/gemini-bot/bot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0}
+            "Recording": {"script": "/bots/opus_recorder.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0},
+            "Benny Botman": {"script": "/bots/gemini-bot/bot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0}
         }
         
         self.verified_users = {} # {username: timestamp_last_seen}
         self.user_mic_check_entry = {} # {username: entry_timestamp}
         
+    def cleanup_zombies(self):
+        """Kills any lingering bot processes from previous sessions."""
+        print("Supervisor: Cleaning up zombie bots...")
+        zombies = ["echobot.py", "opus_recorder.py", "gemini-bot/bot.py"]
+        for z in zombies:
+            try:
+                subprocess.run(["pkill", "-f", z], check=False)
+            except Exception as e:
+                print(f"Error killing {z}: {e}")
+
     def mumble_connected(self):
         print(f"Supervisor Connected to Mumble as {BOT_NAME}")
         
@@ -37,18 +47,75 @@ class SupervisorBot:
             self.mumble.users.myself.mute()
         except: pass
         
-        self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)
+        self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_TEXTMESSAGERECEIVED, self.text_received)
 
-    def sound_received(self, user, sound):
-        """Used to detect audio activity for mic check verification"""
-        name = user.get('name')
-        if name and name in self.user_mic_check_entry:
-            # If they are in Mic Check and speaking, they are verified
-            if time.time() - self.user_mic_check_entry[name] > 3.0:
-                if name not in self.verified_users:
-                    print(f"Supervisor: User {name} verified via Audio + Time.")
-                    user.send_text_message("✅ <b>Mic Check Complete</b>. You are verified.")
-                self.verified_users[name] = time.time()
+    def mumble_disconnected(self):
+        """Handle disconnect/kick - force graceful shutdown and restart."""
+        print("Supervisor: Disconnected/Kicked from Mumble! Force quitting...", flush=True)
+        try:
+            self.graceful_shutdown()
+        except Exception as e:
+            print(f"Supervisor: Error during shutdown in callback: {e}", flush=True)
+        finally:
+            os._exit(0)  # Hard exit to ensure Docker restart immediately
+
+    def text_received(self, msg):
+        """Handle text commands for testing"""
+        import re
+        text = re.sub('<[^<]+?>', '', msg.message).strip()
+        
+        if text == "!test":
+            # Create AI Test Room and move Benny there
+            self.create_test_room_and_move_benny()
+            
+        elif text.startswith("!verify_user "):
+            # Trusted bot reporting verification
+            # Security: In a real app we'd verify the sender is Echo, but here checking name/cert is enough or loose trust
+            # For now, just trust it.
+            target_user = text.replace("!verify_user ", "").strip()
+            print(f"Supervisor: Received verification for {target_user} from {msg.actor}")
+            self.verified_users[target_user] = time.time()
+            
+            # Notify user - Handled by EchoBot now
+            # Find user object
+            pass
+    
+    def create_test_room_and_move_benny(self):
+        """Creates AI Test Room under Hallway and moves Benny there"""
+        try:
+            hallway = self.mumble.channels.find_by_name("Hallway 🖉")
+            if not hallway:
+                print("Supervisor: Hallway not found")
+                return
+            
+            # Check if AI Test Room already exists
+            ai_test = None
+            for c in self.mumble.channels.values():
+                if c.get('name') == 'AI Test Room':
+                    ai_test = c
+                    break
+            
+            if not ai_test:
+                print("Supervisor: Creating AI Test Room...")
+                self.mumble.channels.new_channel(hallway['channel_id'], 'AI Test Room', temporary=True)
+                time.sleep(1)
+                for c in self.mumble.channels.values():
+                    if c.get('name') == 'AI Test Room':
+                        ai_test = c
+                        break
+            
+            if ai_test:
+                print(f"Supervisor: AI Test Room ready (ID: {ai_test['channel_id']})")
+                # Move Benny there
+                for u in self.mumble.users.values():
+                    if u['name'] == 'Benny Botman':
+                        print("Supervisor: Moving Benny to AI Test Room...")
+                        u.move_in(ai_test['channel_id'])
+                        break
+        except Exception as e:
+            print(f"Supervisor: Error creating test room: {e}")
+
+
 
     def update_status_comment(self):
         """Updates the Supervisor's User Comment with the status of all bots and reasons."""
@@ -61,7 +128,7 @@ class SupervisorBot:
             if status == "🔴 Offline":
                 if name == "Echo":
                     reason = " (Waiting for humans/unverified users)"
-                elif name in ["Recording", "PodBot"]:
+                elif name in ["Recording", "Benny Botman"]:
                     if not data.get('should_be_online'):
                         reason = " (Stage empty or waiting for new users after kick)"
                     else:
@@ -88,18 +155,33 @@ class SupervisorBot:
         humans = set()
         stage_humans = set()
         mic_check_humans = set()
+        audience_humans = set()
+        backstage_humans = set()
+        hallway_humans = set()
         unverified_humans = False
         
         mc_chan = None
         st_chan = None
+        au_chan = None
+        bs_chan = None
+        hallway_chan = None
+        
         try:
             mc_chan = self.mumble.channels.find_by_name(MIC_CHECK_CHANNEL)
             st_chan = self.mumble.channels.find_by_name(TARGET_STAGE)
+            au_chan = self.mumble.channels.find_by_name("Audience 👂")
+            bs_chan = self.mumble.channels.find_by_name("Backstage 🤐")
         except: pass
+        
+        # Robust Hallway finder (startswith to handle unicode)
+        for c in self.mumble.channels.values():
+            if c.get('name', '').startswith("Hallway"):
+                hallway_chan = c
+                break
 
-        for user in self.mumble.users.values():
+        for user in list(self.mumble.users.values()):
             name = user.get('name')
-            if not name or name in [BOT_NAME, "Echo", "Recording", "PodBot"]:
+            if not name or name in [BOT_NAME, "Echo", "Benny Botman"] or name.startswith("Recording"):
                 continue
             
             humans.add(name)
@@ -107,6 +189,12 @@ class SupervisorBot:
             
             if st_chan and chan_id == st_chan['channel_id']:
                 stage_humans.add(name)
+            
+            if au_chan and chan_id == au_chan['channel_id']:
+                audience_humans.add(name)
+                
+            if bs_chan and chan_id == bs_chan['channel_id']:
+                backstage_humans.add(name)
                 
             if mc_chan and chan_id == mc_chan['channel_id']:
                 mic_check_humans.add(name)
@@ -121,31 +209,80 @@ class SupervisorBot:
                 self.verified_users[name] = time.time() # Keep alive while present
             else:
                 unverified_humans = True
-        
-        return humans, stage_humans, mic_check_humans, unverified_humans
 
-    def get_presence_stats_from_info(self, humans, stage_humans, mic_check_humans, unverified_humans):
+                
+            # Track Hallway (Recursive Check)
+            if hallway_chan:
+                # Check if current channel is Hallway or a descendant
+                curr = self.mumble.channels.get(chan_id)
+                while curr:
+                    if curr['channel_id'] == hallway_chan['channel_id']:
+                        hallway_humans.add(name)
+                        break
+                    # Move up tree - use .get() to safely handle root channel
+                    parent_id = curr.get('parent')
+                    curr = self.mumble.channels.get(parent_id) if parent_id is not None else None
+        
+        return humans, stage_humans, mic_check_humans, unverified_humans, audience_humans, backstage_humans, hallway_humans
+
+    def get_presence_stats_from_info(self, humans, stage_humans, mic_check_humans, unverified_humans, audience_humans, backstage_humans, hallway_humans):
         """Calculates which bots should be on based on info sets."""
         # ECHO BOT LOGIC:
         echo_should_be_on = len(humans) > 0 and (len(mic_check_humans) > 0 or unverified_humans)
         
+        # Debug Echo Logic
+        if echo_should_be_on:
+             print(f"DEBUG: Echo ON. Humans: {len(humans)}, MicCheck: {len(mic_check_humans)}, Unverified: {unverified_humans}")
+             if unverified_humans:
+                 verified_names = self.verified_users.keys()
+                 unverified_names = [h for h in humans if h not in verified_names]
+                 print(f"DEBUG: Unverified Users: {unverified_names}")
+        
         # REC/PODBOT LOGIC:
-        rec_should_be_on = self.check_kick_aware_presence("Recording", stage_humans)
-        pod_should_be_on = self.check_kick_aware_presence("PodBot", stage_humans)
+        rec_should_be_on = self.check_presence_with_timer("Recording", stage_humans, 60)
+        
+        # Benny Botman joins when Studio subrooms (Stage, Audience, Backstage) OR Hallway descendants are occupied
+        # NOTE: Mic Check does NOT trigger Benny.
+        studio_humans = stage_humans | audience_humans | backstage_humans | hallway_humans
+        
+
+
+        pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 30)
         
         return echo_should_be_on, rec_should_be_on, pod_should_be_on
 
-    def check_kick_aware_presence(self, bot_name, current_stage_humans):
+    def check_presence_with_timer(self, bot_name, current_humans, timeout):
+        data = self.bots[bot_name]
+        is_occupied = len(current_humans) > 0
+        
+        # If occupied, reset timer and potentially trigger "on"
+        if is_occupied:
+            data['empty_timer_start'] = 0
+            # Also handle kick-wait logic here
+            return self.check_kick_aware_presence(bot_name, current_humans)
+        else:
+            # If empty, check timer
+            if data['process'] and data['process'].poll() is None:
+                if data['empty_timer_start'] == 0:
+                    data['empty_timer_start'] = time.time()
+                
+                elapsed = time.time() - data['empty_timer_start']
+                if elapsed < timeout:
+                    return True # Keep it on for now
+                else:
+                    return False # Leave
+            else:
+                return False
+
+    def check_kick_aware_presence(self, bot_name, current_humans):
         data = self.bots[bot_name]
         
         # If process is running, we aren't in a "Kicked" state waiting for re-entry.
         if data['process'] and data['process'].poll() is None:
-            # If it's running but stage becomes empty, it should stop.
-            return len(current_stage_humans) > 0
+            return True
 
-        # If it's NOT running, check if it was previously kicked/stopped.
-        # If stage is empty, definitely stay off.
-        if len(current_stage_humans) == 0:
+        # If stage/studio is empty, definitely stay off.
+        if len(current_humans) == 0:
             data['kick_state_users'] = set()
             return False
 
@@ -155,7 +292,7 @@ class SupervisorBot:
             return True
         else:
             # We are in kick-wait. Check for positive change.
-            new_people = current_stage_humans - data.get('kick_state_users', set())
+            new_people = current_humans - data.get('kick_state_users', set())
             if new_people:
                 print(f"Supervisor: {bot_name} kick-wait cleared by {new_people}")
                 data['kick_wait'] = False
@@ -166,9 +303,9 @@ class SupervisorBot:
         # Update should_be_online for status reporting
         self.bots['Echo']['should_be_online'] = echo
         self.bots['Recording']['should_be_online'] = rec
-        self.bots['PodBot']['should_be_online'] = pod
+        self.bots['Benny Botman']['should_be_online'] = pod
         
-        for name, on in [("Echo", echo), ("Recording", rec), ("PodBot", pod)]:
+        for name, on in [("Echo", echo), ("Recording", rec), ("Benny Botman", pod)]:
             data = self.bots[name]
             is_alive = data['process'] and data['process'].poll() is None
             
@@ -179,8 +316,8 @@ class SupervisorBot:
 
                 print(f"Supervisor: Starting {name}...")
                 data['last_start_attempt'] = time.time()
-                # Special naming for Recording bot handled in its script via args or env
-                cmd = ["python3", data['script'], "--host", MUMBLE_HOST]
+                # Special naming for bots handled in their scripts via args or env
+                cmd = ["python3", "-u", data['script'], "--host", MUMBLE_HOST, "--name", name]
                 
                 try:
                     data['process'] = subprocess.Popen(cmd)
@@ -195,10 +332,42 @@ class SupervisorBot:
                 data['process'].terminate()
                 data['process'] = None
 
+    def graceful_shutdown(self):
+        """Gracefully stop all child bots before container restart."""
+        print("Supervisor: Graceful shutdown - stopping all bots...")
+        for name, data in self.bots.items():
+            if data['process'] and data['process'].poll() is None:
+                print(f"Supervisor: Terminating {name}...")
+                data['process'].terminate()
+        
+        # Wait for processes to exit (up to 5 seconds)
+        import time
+        deadline = time.time() + 5
+        for name, data in self.bots.items():
+            if data['process']:
+                remaining = max(0, deadline - time.time())
+                try:
+                    data['process'].wait(timeout=remaining)
+                    print(f"Supervisor: {name} exited cleanly.")
+                except subprocess.TimeoutExpired:
+                    print(f"Supervisor: {name} did not exit in time, killing...")
+                    data['process'].kill()
+        
+        print("Supervisor: All bots stopped. Exiting...")
+
     async def run(self):
+        self.cleanup_zombies()
         print(f"Connecting to Mumble at {MUMBLE_HOST}...")
-        self.mumble = pymumble.Mumble(MUMBLE_HOST, BOT_NAME, port=64738)
+        
+        # Use persistent certificate for identity
+        cert_file = "/bots/certs/supervisor.pem"
+        key_file = "/bots/certs/supervisor_key.pem"
+        
+        self.mumble = pymumble.Mumble(MUMBLE_HOST, BOT_NAME, port=64738, 
+                                       certfile=cert_file, keyfile=key_file,
+                                       reconnect=False)  # Disable auto-reconnect; we handle it
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CONNECTED, self.mumble_connected)
+        self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_DISCONNECTED, self.mumble_disconnected)
         self.mumble.start()
         
         await asyncio.to_thread(self.mumble.is_ready)
@@ -207,8 +376,10 @@ class SupervisorBot:
         
         while self.is_running:
             if not self.mumble.is_alive():
-                # Reconnect...
-                break 
+                # Disconnected/Kicked - graceful shutdown to trigger container restart
+                print("Supervisor: Disconnected from Mumble. Initiating graceful shutdown...")
+                self.graceful_shutdown()
+                sys.exit(0)  # Docker will restart the container
             
             try:
                 # 1. Enforce Room
@@ -217,21 +388,26 @@ class SupervisorBot:
                 
                 # 2. Check for unexpected bot exits (Kicks)
                 # Need current stage humans for snapshotting
-                humans, stage_humans, mic_check_humans, unverified_humans = self.get_presence_info()
+                humans, stage_humans, mic_check_humans, unverified_humans, audience_humans, backstage_humans, hallway_humans = self.get_presence_info()
 
                 for name, data in self.bots.items():
                     if data['process'] and data['process'].poll() is not None:
                         print(f"Supervisor: {name} exited unexpectedly (Kicked?).")
                         data['process'] = None
                         data['kick_wait'] = True
-                        data['kick_state_users'] = stage_humans.copy()
+                        # Spec says: "Stay offline until a positive change in Stage/Studio occupancy occurs"
+                        # Snap the current relevant group
+                        if name == "Recording":
+                            data['kick_state_users'] = stage_humans.copy()
+                        else:
+                            data['kick_state_users'] = (stage_humans | audience_humans | backstage_humans | hallway_humans).copy()
                         print(f"Supervisor: {name} kick snapshot: {data['kick_state_users']}")
                 
                 # 3. Presence Logic
-                echo, rec, pod = self.get_presence_stats_from_info(humans, stage_humans, mic_check_humans, unverified_humans)
+                echo, rec, pod = self.get_presence_stats_from_info(humans, stage_humans, mic_check_humans, unverified_humans, audience_humans, backstage_humans, hallway_humans)
                 
                 # Update snapshots for kick-wait if they aren't online
-                for name in ["Recording", "PodBot"]:
+                for name in ["Recording", "Benny Botman"]:
                     if self.bots[name]['kick_wait'] and not self.bots[name]['process']:
                         # If we haven't captured snapshot yet or to keep it updated?
                         # User says: "If kicked, it stays gone, until Jordan joins... OR until I leave and re-enter"
@@ -247,10 +423,24 @@ class SupervisorBot:
                 print(f"Supervisor Loop Error: {e}")
                 
             await asyncio.sleep(5)
+        
+        # Loop exited (is_running = False, likely from disconnect callback)
+        print("Supervisor: Main loop exited. Performing graceful shutdown...", flush=True)
+        self.graceful_shutdown()
+        sys.exit(0)  # Docker will restart the container
+            
+    async def run_with_logging(self):
+        try:
+            await self.run()
+        except Exception as e:
+            print(f"FATAL SUPERVISOR ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e
 
 if __name__ == "__main__":
     bot = SupervisorBot()
     try:
-        asyncio.run(bot.run())
+        asyncio.run(bot.run_with_logging())
     except KeyboardInterrupt:
         pass

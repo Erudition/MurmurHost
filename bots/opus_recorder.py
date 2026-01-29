@@ -1,12 +1,17 @@
 import os
 import time
 import struct
+import signal
+import sys
 import collections
 import datetime
 import pymumble_py3 as pymumble
 from pymumble_py3.constants import *
 from pymumble_py3.soundqueue import SoundQueue
 from mumblerecbot.webvtt import WebVtt
+
+# Global reference for signal handler
+_recorder_instance = None
 
 # --- OGG/OPUS MUXER (Bit-Perfect Wrapper) ---
 def ogg_crc(data):
@@ -103,21 +108,30 @@ def get_session_date():
 # --- RECORDER BOT ---
 
 class OpusRecorderBot:
-    def __init__(self, host, port, channel_name):
+    def __init__(self, host, port, display_name):
         self.recording = False
         self.writers = {} 
         self.vtt = None
-        self.record_dir = "recordings/"
+        self.record_dir = os.path.join("recordings", f"Session {get_session_date()}")
         os.makedirs(self.record_dir, exist_ok=True)
         
-        self.display_name = f"Recording (Session {get_session_date()})"
+        self.display_name = display_name
+        # Ensure it has the date suffix if it's the default name
+        if self.display_name == "Recording":
+            self.display_name = f"Recording (Session {get_session_date()})"
+             
         print(f">>> Recorder starting as: {self.display_name}")
 
-        self.mumble = pymumble.Mumble(host, self.display_name, port=port, reconnect=True)
+        # Use persistent certificate for identity
+        cert_file = "/bots/certs/recording.pem"
+        key_file = "/bots/certs/recording_key.pem"
+
+        self.mumble = pymumble.Mumble(host, self.display_name, port=port, reconnect=True,
+                                       certfile=cert_file, keyfile=key_file)
         self.mumble.set_receive_sound(True)
         
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CONNECTED, self.connected)
-        self.channel_name = channel_name
+        self.channel_name = "Audience 👂" # Default to Audience (hears Stage)
         self.start_time = 0
         self.user_stats = collections.defaultdict(lambda: {'packets': 0, 'bytes': 0})
         
@@ -219,13 +233,30 @@ class OpusRecorderBot:
         finally:
             self.stop_recording()
 
+def graceful_shutdown(signum, frame):
+    """Signal handler for graceful shutdown."""
+    global _recorder_instance
+    print(f"\n>>> Recorder: Received signal {signum}, shutting down gracefully...")
+    if _recorder_instance:
+        _recorder_instance.stop_recording()
+    sys.exit(0)
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="murmur")
     parser.add_argument("--port", type=int, default=64738)
-    parser.add_argument("--channel", default="🎙️ Stage 🔴")
+    parser.add_argument("--channel", default="Audience 👂")
+    parser.add_argument("--name", default=None)
     args = parser.parse_args()
     
-    bot = OpusRecorderBot(args.host, args.port, args.channel)
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, graceful_shutdown)
+    signal.signal(signal.SIGINT, graceful_shutdown)
+    
+    # Use provided name if available, otherwise default
+    bot_name = args.name if args.name else f"Recording (Session {get_session_date()})"
+    
+    bot = OpusRecorderBot(args.host, args.port, bot_name)
+    _recorder_instance = bot  # Set global reference for signal handler
     bot.run()

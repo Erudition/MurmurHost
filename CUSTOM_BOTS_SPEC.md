@@ -7,40 +7,45 @@ This document outlines the technical specifications and requirements for the cus
 - **Supervisor Presence**:
     - Room: Root
         - When moved, return to Root immediately
-    - Joins when server starts and is fully warmed up
+    - Joins when server starts
     - Never leaves
     - When kicked from server:
-        - Rejoin immediately
+        - Restart entire `custom bots` container
+            - Gracefully - e.g. Recordings in progress save properly
 - **Echo Bot Presence**:
-    - Room: Mic Check only
     - Joins when:
         - mic-unverified humans are present anywhere on the server 
         - OR someone is in "Mic Check"
+    - Channel: Mic Check only
     - Leaves when:
-        - the Mic Check room is empty
+        - the Mic Check channel is empty
         - AND there are no mic-unverified humans on the server
     - When kicked from server:
         - Rejoin based on same rules
 - **Recording Bot Presence**:
-    - Room: Audience only
-    - Joins when:
+    - Joins server when:
         - Stage is occupied by any human
-    - Leaves when:
+    - Channel: Audience only
+    - Leaves server when:
         - Stage is empty for 60 seconds
     - When kicked from server:
         - Stay offline until a positive change in Stage occupancy occurs (i.e., a person joins)
-- **PodBot Presence**:
-    - Room: Audience (initially)
-    - Joins when:
-        - Studio (or subrooms) are occupied by any human
+- **Live AI Bot Presence**:
+    - Joins server when:
+        - Studio channels OR Hallway channels are occupied by any human
         - AND AI Service is available
-    - Leaves when:
-        - Studio (or subrooms) are empty for 30 seconds
+    - Initial Channel:
+        - `AI Test Room`, if it exists (temp channel and simulated humans can be created for testing)
+        - otherwise `Audience`
+        - May be moved by users, or by agent's own tools
+        - Shall never join a channel with Echo Bot
+    - Leaves server when:
+        - Studio channels are empty for 30 seconds
         - OR AI service is unavailable
     - When kicked from server:
         - Stay offline until a positive change in Studio occupancy occurs (i.e., a person joins)
 - **Testing Bot Presence**:
-    - Room: Decided by testing Agent
+    - Channel: Decided by testing Agent
     - Multiple Testing bots may be spawned as needed - use different names
     - Always offline/disabled by default
     - Runs when triggered manually by Agent for testing of other bots
@@ -49,8 +54,8 @@ This document outlines the technical specifications and requirements for the cus
 
 ## Mic Verification System:
 A human is mic-verified when:
-    - they have been present in the Mic Check room for 3 seconds
-    - AND they were detected to be speaking at least once in that room
+    - they have been present in the Mic Check channel for 3 seconds
+    - AND they were detected to be speaking at least once in that channel
 Verification status persists for 60 seconds after a user leaves the server.
 
 
@@ -66,7 +71,7 @@ Central orchestrator for all bot activity and presence management.
 ---
 
 ## 🎥 Recording Bot (`opus_recorder.py`)
-High-fidelity session recorder that captures individual user streams.
+High-fidelity session recorder that captures individual user streams. Sits in the Audience channel (which can hear the Stage) when humans are in the Stage channel.
 
 - **Bot Naming Scheme**: `Recording (Session YYYY-MM-DD)`.
     - Sessions starting before 07:00 AM are attributed to the previous calendar day.
@@ -82,10 +87,10 @@ High-fidelity session recorder that captures individual user streams.
 
 ---
 
-## 🤖 Gemini Live Bot (`gemini-bot/bot.py`)
+## 🤖 Gemini Live AI Bot (`gemini-bot/bot.py`)
 AI interaction bot powered by Gemini Live API.
 
-- **Name**: Always "Benny Botman"
+- **Name**: Always "Benny Botman" (formerly PodBot)
 - **Core Model**: `gemini-2.5-flash-native-audio-preview-12-2025`.
 - **Voice**: `Fenrir`
 - **API Configuration**:
@@ -101,15 +106,15 @@ AI interaction bot powered by Gemini Live API.
         - Called synchronously (blocking; i.e. mute occurs after agent finishes speaking)
             - Necessary since  Modality will change
     - Self-unmute tool:
-        - Available when muted AND in a room with permission to unmute.
+        - Available when muted AND in a channel with permission to unmute.
         - Called asynchronously (i.e. can use tool during human's turn)
             - Use `"behavior": "NON_BLOCKING"`
             - Use `scheduling="SILENT"`
-    - Change room/channel tool:
+    - Change channel tool:
         - Always available
         - Enumerates valid channel moves based on client permissions
-        - Leaving a room only occurs before or after agent finishes speaking, never during
-    - Room Message tool:
+        - Leaving a channel only occurs before or after agent finishes speaking, never during
+    - Channel Message tool:
         - Always available
         - Enumerates valid channels to message based on client permissions
         - Called asynchronously (i.e. can use tool during human's turn)
@@ -118,9 +123,11 @@ AI interaction bot powered by Gemini Live API.
         - Enumerates valid users to message based on client permissions
         - Called asynchronously (i.e. can use tool during human's turn)
     - Grounding with Google Search
-- **Modality Logic**:
-    - Live API **AUDIO** Mode:
-        - Whenever in a room with permission to speak -- NOT force-muted or force-deafened (suppressed) rooms -- AND any human that can be heard from this room has started transmitting.
+    - Note: Non-tool text output is sent as a message to the Studio channel (seen in all child channels).
+- **Bot Behavior**:
+    - Note: API must be in `AUDIO` mode all the time, as `TEXT` mode has a known bug with this model where it tries to process audio regardless.
+    - Listen-Speak-Listen Mode:
+        - Whenever in a channel with permission to speak -- NOT force-muted or force-deafened (suppressed) channels -- AND any human that can be heard from this channel has started transmitting.
         - When muted:
             - VAD disabled -- audio is sent continuously as one "user's turn" of the conversation in the API.
             - Live Agent may still decide to use unmute tool at any time, so we can ask it to unmute itself rather than doing it in the UI.
@@ -130,10 +137,12 @@ AI interaction bot powered by Gemini Live API.
             - Bot should self-mute when agent sends empty reply (proactive audio feature).
         - When deafened:
             - Leave gap in stream - audio should resume when undeafened as if gap never occured
-    - Live API **TEXT** Mode:
-        - Whenever in a room WITHOUT permission to speak AND not suppressed.
-        - If in Studio/subrooms, non-tool text output is sent as a message to the Studio room/subrooms.
-        - Live Agent may still use tools to send direct messages, send messages to specific channels, etcetera. (Live Agent is encouraged to use message tools rather than output text.)
+    - Listen+Text Mode:
+        - Whenever in a channel WITHOUT permission to speak AND not suppressed.
+        - API VAD disabled. 
+        - Audio is continuously sent
+        - "User" turn never ends, agent must use message tools to communicate.
+        - Live Agent is informed that it is muted, shall not wait for the user's turn to end, and must use message tools rather than output text.
 - **Failure Handling**:
     - Session duration exceeded:
         - details at https://ai.google.dev/gemini-api/docs/live-session
@@ -192,27 +201,45 @@ AI interaction bot powered by Gemini Live API.
 Minimal audio verification utility.
 
 - **Function**: Bounces all incoming audio back to the speaker with minimal latency.
+    - Sends "Mic Check - I can hear you!" to the user when they have been sucessfully echoed AND present in the Mic Check channel for more than 3 seconds.
+        - Only sent once, even if user stays in channel.
 - **Purpose**: Used by users to verify their audio settings and by the Supervisor to confirm human audio activity.
 - **Lifecycle**: Purely managed by the Supervisor; only joins when humans need verification.
 
 ---
 
-## 🧪 Testing Bot (`test_bot.py`)
+## 🧪 Simulated Humans (`test_bot.py`)
 Automated verification tool to simulate user behavior.
 
 - **Manual Tool**: This bot is **not** managed by the Supervisor. It must be manually launched on demand by the coding agent for verification purposes.
-- **Mock Human**: Joins channels, moves between rooms, and plays back audio samples to test other bots.
-- **Audio Simulation**: Uses `ffmpeg` to pipe existing `.opus` recordings into the server as natural speech.
-- **Usage**: Primary tool for validating Supervisor presence logic and Mic Check verification in CI/CD or local development.
+- **Mock Human**: Joins channels, moves between channels, and plays back audio samples to test other bots.
+- **Audio Simulation**: Uses `ffmpeg` to pipe existing `.opus` recordings from `test-speech-clips` into the server as natural speech.
+    - The recording filenames match the content, so their use cases should be obvious.
+    - Remember to unmute before playback. All users that join the server are initially muted, and when leaving a force-muted channel, one must still unmute themselves in the new channel.
+    - Test AI with at least two audio clips (one after the response) to confirm follow-up ability. Don't claim success until you can see the transcription of the second response.
+- **Channel Creation**: Creates temporary channels in the Hallway whenever test environments are needed. 
+    - Clients must connect with a certificate to take advantage of this permission.
+    - Warning: Due to echo bot's feedback loop, Mic Check channel should only be used for testing related functionality.
+    - To prevent junk recordings, only use the stage when testing the recorder.
+- **Usage**: Primary tool for validating Supervisor presence logic and Mic Check verification, and Gemini API reactions, by the coding agent.
 
-# Addendum: Room name mapping and heirarchy
+# Certificates
+- Clients must join with certificates to be Registered.
+- Special permissions granted to users will not be available if not registered, even if the username matches.
+- Registration means anyone that then joins by that username will be rejected if they do not have the correct certificate.
+- Therefore, bots needing special permissions (e.g. Supervisor) must have persistent certificates, be manually registered in the UI, and then manually assigned ACL roles in the UI.
+- Store certs in `certs`.
+
+# Addendum: Channel name mapping and heirarchy
 Unless explicitly specified, bot logic should rely on user permissions in a channel rather than the channel name - channel names and permissions may change.
 
-- Root: "Podcast Server"
-    - Mic Check: "Mic Check 🎧"
+- Root: "Podcast Server" (Supervisor only)
+    - Mic Check: "Mic Check 🎧" (Humans and Echo Bot only - 2-user capacity limit)
     - Studio: "Studio 🗣️"
+        - Parent only - Cannot be directly occupied
         - Audience: "Audience 👂"
         - Backstage: "Backstage 🤐"
         - Stage: "🎙️ Stage 🔴"
     - Hallway: Hallway 🖉
-        - Used to contain temporary rooms - any user can create temporary rooms
+        - Parent only - Cannot be directly occupied
+        - Used to contain temporary channels - any user can create temporary channels
