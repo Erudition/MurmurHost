@@ -11,10 +11,18 @@ class SimpleEchoBot:
     def __init__(self):
         self.mumble = None
         self.is_running = True
+        self.first_sound_times = {}
+        self.verified = set()
         
     def connect(self):
         print(f"EchoBot: Connecting to {HOST} as {USER}...")
-        self.mumble = pymumble.Mumble(HOST, USER, port=64738, reconnect=True)
+        
+        # Use persistent certificate for identity
+        cert_file = "/bots/certs/echo.pem"
+        key_file = "/bots/certs/echo_key.pem"
+        
+        self.mumble = pymumble.Mumble(HOST, USER, port=64738, reconnect=True,
+                                       certfile=cert_file, keyfile=key_file)
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CONNECTED, self.connected)
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)
         self.mumble.start()
@@ -29,12 +37,43 @@ class SimpleEchoBot:
         except: pass
 
     def sound_received(self, user, sound):
-        # ECHO: Bounce audio back
-        self.mumble.sound_output.add_sound(sound.pcm)
+        try:
+            # ECHO: Bounce audio back
+            self.mumble.sound_output.add_sound(sound.pcm)
+            
+            # VERIFICATION Logic
+            name = user.get('name')
+            if name and name not in self.verified:
+                if name not in self.first_sound_times:
+                    self.first_sound_times[name] = time.time()
+                elif time.time() - self.first_sound_times[name] > 3.0:
+                    print(f"EchoBot: Verifying {name}...")
+                    self.verified.add(name)
+                    user.send_text_message("Mic Check - I can hear you!")
+                    # Notify Supervisor
+                    self.notify_supervisor(name)
+                    
+        except Exception as e:
+            print(f"EchoBot Error: {e}")
+
+    def notify_supervisor(self, username):
+        supervisor = None
+        for u in self.mumble.users.values():
+            if u.get('name') == "Supervisor":
+                supervisor = u
+                break
+        
+        if supervisor:
+            supervisor.send_text_message(f"!verify_user {username}")
+        else:
+            print("EchoBot: Supervisor not found to notify.")
 
     def run(self):
         self.connect()
-        while self.is_running and self.mumble.is_alive():
+        while self.is_running:
+            if not self.mumble.is_alive():
+                print("EchoBot: Mumble thread died. Attempting restart...")
+                self.mumble.start()
             time.sleep(1)
 
 if __name__ == "__main__":

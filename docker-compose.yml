@@ -37,6 +37,8 @@ services:
       - ./bots/opus_recorder.py:/bots/opus_recorder.py
       - ./bots/test_bot.py:/bots/test_bot.py
       - ./bots/gemini-bot:/bots/gemini-bot
+      - ./bots/certs:/bots/certs
+      - ./bots/test-speech-clips:/bots/test-speech-clips
     restart: unless-stopped
     depends_on:
       - murmur
