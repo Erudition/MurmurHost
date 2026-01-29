@@ -101,48 +101,46 @@ AI interaction bot powered by Gemini Live API.
     - `enable_affective_dialog`: Enabled for natural speech patterns.
     - `proactive_audio`: Allow the model to decide not to respond. Important for when humans are talking to each other rather than to the bot.
 - **Agent Tools**:
-    - Self-mute tool:
-        - Available when not muted.
-        - Called synchronously (blocking; i.e. mute occurs after agent finishes speaking)
-            - Necessary since  Modality will change
-    - Self-unmute tool:
-        - Available when muted AND in a channel with permission to unmute.
-        - Called asynchronously (i.e. can use tool during human's turn)
-            - Use `"behavior": "NON_BLOCKING"`
-            - Use `scheduling="SILENT"`
     - Change channel tool:
         - Always available
         - Enumerates valid channel moves based on client permissions
         - Leaving a channel only occurs before or after agent finishes speaking, never during
+            - Thus synchronous - default blocking behavior
     - Channel Message tool:
         - Always available
         - Enumerates valid channels to message based on client permissions
         - Called asynchronously (i.e. can use tool during human's turn)
+            - Use `"behavior": "NON_BLOCKING"`
     - Direct Message tool:
         - Always available
         - Enumerates valid users to message based on client permissions
         - Called asynchronously (i.e. can use tool during human's turn)
+            - Use `"behavior": "NON_BLOCKING"`
     - Grounding with Google Search
     - Note: Non-tool text output is sent as a message to the Studio channel (seen in all child channels).
 - **Bot Behavior**:
-    - Note: API must be in `AUDIO` mode all the time, as `TEXT` mode has a known bug with this model where it tries to process audio regardless.
-    - Listen-Speak-Listen Mode:
-        - Whenever in a channel with permission to speak -- NOT force-muted or force-deafened (suppressed) channels -- AND any human that can be heard from this channel has started transmitting.
-        - When muted:
-            - VAD disabled -- audio is sent continuously as one "user's turn" of the conversation in the API.
-            - Live Agent may still decide to use unmute tool at any time, so we can ask it to unmute itself rather than doing it in the UI.
-        - When unmuted:
-            - VAD resumed -- Live API decides when "user's turn" ends and when to speak.
-            - Agent may use tool to mute itself.
-            - Bot should self-mute when agent sends empty reply (proactive audio feature).
-        - When deafened:
-            - Leave gap in stream - audio should resume when undeafened as if gap never occured
-    - Listen+Text Mode:
-        - Whenever in a channel WITHOUT permission to speak AND not suppressed.
-        - API VAD disabled. 
-        - Audio is continuously sent
-        - "User" turn never ends, agent must use message tools to communicate.
-        - Live Agent is informed that it is muted, shall not wait for the user's turn to end, and must use message tools rather than output text.
+    - Self-Mute Status:
+        - Bot is ALWAYS muted when the Live API is not connected.
+        - Bot is ALWAYS unmuted when the Live API is connected and streaming what it hears.
+        - Bot's self-mute status should be a reliable indicator of API connection, even dropouts that are smoothed over.
+    - Live API must be in `AUDIO` mode all the time 
+        - (`TEXT` mode has a known bug with this model where it tries to process audio regardless)
+    - Streaming Connection is ALLOWED only:
+        - Whenever in a channel with permission to speak
+            - NOT force-muted or force-deafened (suppressed) channels
+    - Streaming Connection should start: 
+        - when speaking is allowed 
+        - AND any human that can be heard from this channel has started transmitting
+            - Stay disconnected until first human speech starts, mute status reflects this
+            - Audio should be buffered from the start even if API does not connect immediately
+    - While streaming:
+        - Live API's built-in VAD should still be used - just because a mumble client is transmitting, does not mean it's valid speech - let API-side VAD handle this
+    - Streaming should be ended by bot when:
+        - Bot is muted by another user: Session ends, bot moves to Audience (if on Stage)
+        - Agent chooses not to respond (empty reply - `proactive audio` feature).
+        - No one has spoken for 60 seconds
+    - When streaming ends while on stage:
+        - Bot should move to Audience channel
 - **Failure Handling**:
     - Session duration exceeded:
         - details at https://ai.google.dev/gemini-api/docs/live-session
@@ -164,7 +162,7 @@ AI interaction bot powered by Gemini Live API.
             - Normal presence logic resumes when (the time that the Gemini Live API considers midnight) passes.
     - Connection dropped during AUDIO streaming:
         - Auto reconnection period:
-            - Bot self-muted if not already
+            - Bot self-mutes
             - Log error to server chat
             - Bot continues to buffer audio
             - Retry with backoff strategy:
@@ -175,13 +173,7 @@ AI interaction bot powered by Gemini Live API.
         - After failure to reconnect:
             - Bot goes offline
             - Normal presence logic resumes after 10 minutes.
-    - Connection dropped during TEXT streaming:
-        - Use exponential backoff retry strategy.
-        - Provide all context from previous session to new session.
-    - Contxt window exceeded:
-        - Truncate first 50% of history.
-        - Log warning to server chat.
-- **Usage Tracking**: Displays real-time stats in its Mumble User Comment.
+- **Usage Tracking**: Displays real-time stats in its Mumble User Comment, updated after every turn.
     - Token usage:
         - tracked by in the usageMetadata field of the returned server message
         - shown as a fraction out of the API Quota: ` 0 / 128,000`
@@ -236,7 +228,7 @@ Unless explicitly specified, bot logic should rely on user permissions in a chan
 - Root: "Podcast Server" (Supervisor only)
     - Mic Check: "Mic Check 🎧" (Humans and Echo Bot only - 2-user capacity limit)
     - Studio: "Studio 🗣️"
-        - Parent only - Cannot be directly occupied
+        - Parent only - Cannot be directly occupied. All children can hear stage.
         - Audience: "Audience 👂"
         - Backstage: "Backstage 🤐"
         - Stage: "🎙️ Stage 🔴"
