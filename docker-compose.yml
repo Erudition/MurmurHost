@@ -29,7 +29,7 @@ services:
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
-      - GEMINI_API_KEY=AIzaSyA_Yjb6fnN0FkFEIIXUc7hh-CXVXYmkB9c
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - ./recordings:/bots/recordings
       - ./bots/supervisor_bot.py:/bots/supervisor_bot.py
