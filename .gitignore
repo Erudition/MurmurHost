@@ -32,7 +32,3 @@ Thumbs.db
 # Secrets (Review if these contain real secrets)
 # bots/mumble-bot/config.yml (If it has secrets)
 # murmur.ini (If it has secrets, though we edited it directly. We should probably commit a template instead)
-
-# Bot Runtime Artifacts
-bots/certs/
-bots/test-speech-clips/
