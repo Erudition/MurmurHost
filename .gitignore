@@ -29,6 +29,16 @@ bots/mumble-bot/node_modules/
 .DS_Store
 Thumbs.db
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Secrets (Review if these contain real secrets)
 # bots/mumble-bot/config.yml (If it has secrets)
 # murmur.ini (If it has secrets, though we edited it directly. We should probably commit a template instead)
