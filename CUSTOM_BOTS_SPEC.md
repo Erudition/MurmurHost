@@ -178,9 +178,10 @@ AI interaction bot powered by Gemini Live API.
 - **Usage Tracking**: Displays real-time stats in its Mumble User Comment, updated after every turn.
     - Token usage:
         - tracked by in the usageMetadata field of the returned server message
-        - shown as a fraction out of the API Quota: ` 0 / 128,000`
+        - shown as a fraction out of the Context Window Size: ` 0 / 128,000`
     - Request count:
         - tracked by counting the number of turns that have occured since midnight.
+            - This must therefore be remembered even when the bot leaves and comes back.
         - shown as a fraction out of the API Quota: ` 0 / 50 ` (Preview Model Limit)
     - Show separate stats for each API Key.
     - Dropouts (since joining the server)
