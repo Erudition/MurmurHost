@@ -33,6 +33,20 @@ class GeminiLiveIntegration:
         self.receiver_task = None
         self.gemini_session_ctx = None
         self._speaking = False
+        
+        # Audio Handling State (moved from bot.py)
+        self.waiting_for_activity = False
+        self.last_audio_received = 0
+        self.audio_buffer = collections.deque(maxlen=100)  # Buffer approx 2 sec (100 * 20ms)
+        self.current_speaker = None
+        self.sound_counter = 0
+        
+        # Stats
+        self.dropout_counts = 0
+        self.total_retries = 0
+        self.successful_retries = 0
+        self.total_disconnection_duration = 0
+        self.last_disconnect_time = 0
 
     def get_system_prompt(self):
         prompt_path = os.path.join(os.path.dirname(__file__), "SYSTEM_PROMPT.md")
@@ -66,7 +80,7 @@ class GeminiLiveIntegration:
             # Spec: configure the sessionResumption field to smoothly handle WebSocket resets
             config = types.LiveConnectConfig(
                 response_modalities=[modality],
-                system_instruction=types.Content(parts=[types.Part(text=SYSTEM_INSTRUCTION)]),
+                system_instruction=types.Content(parts=[types.Part(text=self.get_system_prompt())]),
                 tools=tools_def, 
                 context_window_compression=types.ContextWindowCompressionConfig(
                     sliding_window=types.SlidingWindow()
@@ -146,29 +160,9 @@ class GeminiLiveIntegration:
                                 media=types.Blob(data=silence, mime_type="audio/pcm;rate=16000")
                             )
                         except Exception as e:
-                             self.log(f"WARNING: send_realtime_input KeepAlive Failed: {e}. Attempting transparent reconnect...")
-                             # Don't set to None, try to reconnect
-                             try:
-                                 # Re-use the Connect logic but cleanly
-                                 # We need to run this in a way that creates a new session and replaces self.gemini_session
-                                 # But we cannot await connect_live_api because it acts as a context manager and blocks.
-                                 # We technically need to restart the whole connection flow.
-                                 # The best way is to Signal the main loop or just spawn a new connection task?
-                                 
-                                 # Hack: Create a new task to reconnect, and let this loop die? 
-                                 # No, if this loop dies, we stop sending.
-                                 
-                                 # Actual fix: Signal a "soft reset"
-                                 self.gemini_session = "CONNECTING"
-                                 # We use the existing method but need to avoid cancelling ourselves if possible?
-                                 # connect_live_api cancels sender_task. We are in sender_task.
-                                 # So we MUST exit this loop after calling connect_live_api asynchronously.
-                                 
-                                 asyncio.create_task(self.connect_live_api("AUDIO"))
-                                 return # Exit sender_loop, the new one will start.
-                             except Exception as re:
-                                 self.log(f"ERROR: Reconnect failed: {re}")
-                                 self.gemini_session = None
+                             self.log(f"WARNING: send_realtime_input KeepAlive Failed: {e}")
+                             # Original behavior: set session to None so main loop triggers reconnect
+                             self.gemini_session = None
                     continue
 
                 if self.gemini_session and not isinstance(self.gemini_session, str):
@@ -290,3 +284,67 @@ class GeminiLiveIntegration:
                     name=call.name, id=call.id, response={"result": result}
                 )]
             ))
+
+    def handle_disconnect(self):
+        """Called when the Gemini session ends. Sets waiting_for_activity to pause reconnection until audio resumes."""
+        self.dropout_counts += 1
+        self.last_disconnect_time = time.time()
+        self.waiting_for_activity = True
+        self.log("Session ended. Waiting for audio activity before reconnecting...")
+
+    def sound_received(self, user, sound):
+        """
+        Core audio reception callback. Resamples Mumble audio (48kHz) to Gemini format (16kHz),
+        handles activity detection, interruption, and pushes audio to the Gemini queue.
+        """
+        self.sound_counter += 1
+        
+        try:
+            pcm_data = sound.pcm
+            # Resample from 48000 to 16000 for Gemini
+            resampled = audioop.ratecv(pcm_data, 2, 1, 48000, 16000, None)[0]
+            rms = audioop.rms(resampled, 2)
+            
+            # 1. Wake up if waiting for activity
+            if self.waiting_for_activity:
+                # Buffer the audio so we don't lose the start of the sentence
+                self.audio_buffer.append(resampled)
+
+                if self.sound_counter % 10 == 0:
+                     self.log(f"Waiting for activity... RMS: {rms}")
+                
+                # Lower threshold to 150 to be more sensitive
+                if rms > 150: 
+                    self.log(f"Audio activity detected (RMS: {rms}) - flagging for reconnection")
+                    self.waiting_for_activity = False
+                    try:
+                        chan = self.mumble.channels.get(self.mumble.users.myself['channel_id'])
+                        chan.send_text_message("<i>👂 Waking up...</i>")
+                    except: pass
+            
+            # 2. Interruption Handling
+            # If the bot is speaking and the user speaks over it (RMS > Threshold), clear the buffer.
+            if hasattr(self, '_speaking') and self._speaking and rms > 500:
+                self.log(f"Interruption detected (RMS: {rms}) - Clearing local audio buffer")
+                self.mumble.sound_output.clear_buffer()
+                # We do NOT return here; we still want to send the user's interruption audio to Gemini
+                # so it knows to stop generating/change context.
+
+            if not self.gemini_session: 
+                return
+            
+            name = user.get('name')
+            if name != self.current_speaker:
+                self.current_speaker = name
+            
+            # Track activity for reconnection logic (keep-alive watchdog)
+            self.last_audio_received = time.time()
+            
+            # Send everything to Gemini, let its VAD handle it
+            try:
+                self.to_gemini_queue.put_nowait(resampled)
+            except Exception as qe:
+                self.log(f"DEBUG: Queue put failed: {qe}")
+
+        except Exception as e:
+            self.log(f"DEBUG: sound_received error: {e}")

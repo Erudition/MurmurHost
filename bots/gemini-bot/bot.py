@@ -26,20 +26,6 @@ class MumbleGeminiBot(GeminiLiveIntegration):
     def __init__(self):
         super().__init__()
         self.mumble = None
-        self.is_running = True
-        self.current_speaker = None
-        self.sound_counter = 0
-        
-        # Stats
-        self.dropout_counts = 0
-        self.total_retries = 0
-        self.successful_retries = 0
-        self.total_disconnection_duration = 0
-        self.last_disconnect_time = 0
-        
-        # If timed out due to inactivity, wait for audio before reconnecting
-        self.waiting_for_activity = False
-        self.last_audio_received = 0
         
         # Transcription logging to file
         self.transcript_file = open("/bots/recordings/benny_transcripts.txt", "a")
@@ -86,9 +72,6 @@ class MumbleGeminiBot(GeminiLiveIntegration):
             
         self.mumble.set_receive_sound(True)
         
-        # Audio Buffer for reconnection
-        self.audio_buffer = collections.deque(maxlen=100) # Buffer approx 2 sec (100 * 20ms)
-        
         # Initial Move to AI Test Room (if exists) or Audience (as per spec)
         target_chan = None
         try:
@@ -126,65 +109,6 @@ class MumbleGeminiBot(GeminiLiveIntegration):
              self.mumble.users.myself.comment(msg)
         except: pass
 
-    def handle_disconnect(self):
-        self.dropout_counts += 1
-        self.last_disconnect_time = time.time()
-        self.waiting_for_activity = True
-        self.log("Session ended. Waiting for audio activity before reconnecting...")
-
-    def sound_received(self, user, sound):
-        self.sound_counter += 1
-        
-        # RMS Calculation for Activity & Interruption
-        try:
-            pcm_data = sound.pcm
-            # Resample from 48000 to 16000 for Gemini
-            resampled = audioop.ratecv(pcm_data, 2, 1, 48000, 16000, None)[0]
-            rms = audioop.rms(resampled, 2)
-            
-            # 1. Wake up if waiting for activity
-            if self.waiting_for_activity:
-                # Buffer the audio so we don't lose the start of the sentence
-                if not hasattr(self, 'audio_buffer'):
-                    self.audio_buffer = collections.deque(maxlen=100)
-                self.audio_buffer.append(resampled)
-
-                if self.sound_counter % 10 == 0:
-                     self.log(f"Waiting for activity... RMS: {rms}")
-                
-                # Lower threshold to 150 to be more sensitive
-                if rms > 150: 
-                    self.log(f"Audio activity detected (RMS: {rms}) - flagging for reconnection")
-                    self.waiting_for_activity = False
-                    try:
-                        chan = self.mumble.channels.get(self.mumble.users.myself['channel_id'])
-                        chan.send_text_message("<i>👂 Waking up...</i>")
-                    except: pass
-            
-            # 2. Interruption Handling
-            # If the bot is speaking and the user speaks over it (RMS > Threshold), clear the buffer.
-            if hasattr(self, '_speaking') and self._speaking and rms > 500:
-                self.log(f"Interruption detected (RMS: {rms}) - Clearing local audio buffer")
-                self.mumble.sound_output.clear_buffer()
-                # We do NOT return here; we still want to send the user's interruption audio to Gemini
-                # so it knows to stop generating/change context.
-
-            if not self.gemini_session: 
-                return
-            
-            name = user.get('name')
-            if name != self.current_speaker:
-                # self.log(f"DEBUG: Audio received from {name}")
-                self.current_speaker = name
-            
-            # Track activity for reconnection logic (keep-alive watchdog)
-            self.last_audio_received = time.time()
-            
-            # Send everything to Gemini, let its VAD handle it
-            self.to_gemini_queue.put_nowait(resampled)
-
-        except Exception as e:
-            self.log(f"DEBUG: sound_received error: {e}")
 
     def text_message_received(self, msg):
         sender = self.mumble.users.get(msg.actor)
