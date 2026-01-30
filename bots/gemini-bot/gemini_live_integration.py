@@ -3,6 +3,7 @@ import os
 import time
 import audioop
 import collections
+import contextlib
 from google import genai
 from google.genai import types
 from google.genai import errors as genai_errors
@@ -48,31 +49,43 @@ class GeminiLiveIntegration:
         tools_def = tools.get_tools_definition()
 
         try:
+            # Fake session to keep bot.py sending audio to to_gemini_queue during connection
+            self.gemini_session = "CONNECTING"
+            
             # Clean up old session/tasks if any
-            if self.sender_task: self.sender_task.cancel()
-            if self.receiver_task: self.receiver_task.cancel()
+            if self.sender_task: 
+                self.sender_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self.sender_task
+            if self.receiver_task: 
+                self.receiver_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self.receiver_task
             
-            # Latest SDK prefers flattened config directly in connect or config object
-            # response_modalities should be a list
-            config = {
-                "response_modalities": [modality],
-                "system_instruction": self.get_system_prompt(),
-                "tools": tools_def,
-            }
-            
-            # Always include AUDIO config for stability
-            config.update({
-                "speech_config": {
-                    "voice_config": {"prebuilt_voice_config": {"voice_name": VOICE_NAME}}
-                },
-                "output_audio_transcription": {},
-                "input_audio_transcription": {},
-            })
+            # Spec: set contextWindowCompression config to use types.SlidingWindow()
+            # Spec: configure the sessionResumption field to smoothly handle WebSocket resets
+            config = types.LiveConnectConfig(
+                response_modalities=[modality],
+                system_instruction=types.Content(parts=[types.Part(text=SYSTEM_INSTRUCTION)]),
+                tools=tools_def, 
+                context_window_compression=types.ContextWindowCompressionConfig(
+                    sliding_window=types.SlidingWindow()
+                ),
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE_NAME)
+                    )
+                ),
+                output_audio_transcription=types.AudioTranscriptionConfig(),
+                input_audio_transcription=types.AudioTranscriptionConfig(),
+            )
 
             if self.resumption_token:
-                config["session_resumption"] = types.SessionResumptionConfig(handle=self.resumption_token)
+                config.session_resumption = types.SessionResumptionConfig(handle=self.resumption_token)
+            else:
+                 # Enable resumption for future sessions by including the config
+                 config.session_resumption = types.SessionResumptionConfig()
 
-            self.log(f"DEBUG: Gemini Config: {config}")
             self.gemini_session_ctx = self.client.aio.live.connect(model=MODEL_ID, config=config)
             self.log(f"Gemini Connect call initiated (Modality: {modality})...")
             self.gemini_session = await self.gemini_session_ctx.__aenter__()
@@ -95,6 +108,12 @@ class GeminiLiveIntegration:
             self.sender_task = asyncio.create_task(self.sender_loop())
             self.receiver_task = asyncio.create_task(self.receiver_loop())
             
+            # Re-register sound callback to ensure audio flow
+            if hasattr(self, 'mumble') and hasattr(self.mumble, 'callbacks') and hasattr(self, 'sound_received'):
+                from pymumble_py3.callbacks import PYMUMBLE_CLBK_SOUNDRECEIVED
+                self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)
+                self.log("Re-registered audio callback.")
+            
         except Exception as e:
             self.log(f"Gemini Connect Failed: {e}")
             await asyncio.sleep(5)
@@ -111,23 +130,48 @@ class GeminiLiveIntegration:
         try:
             while self.is_running:
                 try:
-                    # Wait for items with a 4.0s timeout to allow for keep-alive pings (more frequent than 10s)
-                    item = await asyncio.wait_for(self.to_gemini_queue.get(), timeout=4.0)
+                    # Wait for items with a 9.0s timeout to allow for keep-alive pings (longer persistence)
+                    item = await asyncio.wait_for(self.to_gemini_queue.get(), timeout=9.0)
                 except asyncio.TimeoutError:
-                    if self.gemini_session:
+                    if self.gemini_session and not isinstance(self.gemini_session, str):
                         # Don't send keep-alive if we are currently outputting audio (speaking)
                         if hasattr(self, '_speaking') and self._speaking:
                             continue
 
-                        # self.log("DEBUG: Sending keep-alive silence...")
-                        # Small 100ms silence packet
+                        self.log("DEBUG: Sending keep-alive silence...")
+                        # Small 200ms silence packet
                         silence = b'\x00' * 3200 
-                        await self.gemini_session.send_realtime_input(
-                            media=types.Blob(data=silence, mime_type="audio/pcm;rate=16000")
-                        )
+                        try:
+                             await self.gemini_session.send_realtime_input(
+                                media=types.Blob(data=silence, mime_type="audio/pcm;rate=16000")
+                            )
+                        except Exception as e:
+                             self.log(f"WARNING: send_realtime_input KeepAlive Failed: {e}. Attempting transparent reconnect...")
+                             # Don't set to None, try to reconnect
+                             try:
+                                 # Re-use the Connect logic but cleanly
+                                 # We need to run this in a way that creates a new session and replaces self.gemini_session
+                                 # But we cannot await connect_live_api because it acts as a context manager and blocks.
+                                 # We technically need to restart the whole connection flow.
+                                 # The best way is to Signal the main loop or just spawn a new connection task?
+                                 
+                                 # Hack: Create a new task to reconnect, and let this loop die? 
+                                 # No, if this loop dies, we stop sending.
+                                 
+                                 # Actual fix: Signal a "soft reset"
+                                 self.gemini_session = "CONNECTING"
+                                 # We use the existing method but need to avoid cancelling ourselves if possible?
+                                 # connect_live_api cancels sender_task. We are in sender_task.
+                                 # So we MUST exit this loop after calling connect_live_api asynchronously.
+                                 
+                                 asyncio.create_task(self.connect_live_api("AUDIO"))
+                                 return # Exit sender_loop, the new one will start.
+                             except Exception as re:
+                                 self.log(f"ERROR: Reconnect failed: {re}")
+                                 self.gemini_session = None
                     continue
 
-                if self.gemini_session:
+                if self.gemini_session and not isinstance(self.gemini_session, str):
                     if isinstance(item, bytes):
                         try:
                             await self.gemini_session.send_realtime_input(
@@ -208,7 +252,17 @@ class GeminiLiveIntegration:
                 
                 # Resumption Token
                 if msg.session_resumption_update:
-                    self.resumption_token = msg.session_resumption_update.handle
+                    self.log(f"DEBUG: Resumption Update Received: {msg.session_resumption_update}")
+                    if hasattr(msg.session_resumption_update, 'new_handle'):
+                        token = msg.session_resumption_update.new_handle
+                        if token:
+                            self.resumption_token = token
+                            self.log(f"DEBUG: Saved Resumption Token: {token[:10]}...")
+                    elif hasattr(msg.session_resumption_update, 'handle'):
+                         token = msg.session_resumption_update.handle
+                         if token:
+                             self.resumption_token = token
+                             self.log(f"DEBUG: Saved Resumption Token: {token[:10]}...")
                 
                 if msg.server_content and msg.server_content.turn_complete:
                      self.total_requests += 1
