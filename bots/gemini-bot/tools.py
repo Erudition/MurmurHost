@@ -46,6 +46,10 @@ def get_tools_definition():
                         },
                         "required": ["username", "message"]
                     }
+                },
+                {
+                    "name": "list_channels",
+                    "description": "Get a list of all visible channels on the Mumble server."
                 }
             ]
         }
@@ -81,13 +85,16 @@ async def dispatch_tool_call(bot, call):
         elif name == "send_direct_message":
             target_user = None
             for u in bot.mumble.users.values():
-                if u['name'] == args['username']:
+                if u['name'] == args.get('username'):
                     target_user = u
                     break
             if target_user:
-                target_user.send_text_message(f"<b>(Private) {bot.bot_name}:</b> {args['message']}")
+                target_user.send_text_message(f"<b>(Private) {bot.bot_name}:</b> {args.get('message')}")
             else:
-                result = f"Error: User {args['username']} not found."
+                result = f"Error: User {args.get('username')} not found."
+        elif name == "list_channels":
+            channels = [c['name'] for c in bot.mumble.channels.values()]
+            result = f"Visible channels: {', '.join(channels)}"
         else:
             result = f"Error: Tool {name} not implemented."
     except Exception as e:

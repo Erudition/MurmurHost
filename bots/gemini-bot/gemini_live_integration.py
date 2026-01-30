@@ -59,6 +59,13 @@ class GeminiLiveIntegration:
 
     async def connect_live_api(self, modality):
         self.log(f"Connecting to Gemini Live API (Modality: {modality})...")
+        self._speaking = False
+        self.current_modality = modality
+        
+        # Drain queues to ensure clean state on reconnect
+        while not self.to_gemini_queue.empty():
+            try: self.to_gemini_queue.get_nowait()
+            except: break
         
         tools_def = tools.get_tools_definition()
 
@@ -94,12 +101,12 @@ class GeminiLiveIntegration:
                 input_audio_transcription=types.AudioTranscriptionConfig(),
             )
 
-            if self.resumption_token:
-                config.session_resumption = types.SessionResumptionConfig(handle=self.resumption_token)
-            else:
-                 # Enable resumption for future sessions by including the config
-                 config.session_resumption = types.SessionResumptionConfig()
-
+            # if self.resumption_token:
+            #     config.session_resumption = types.SessionResumptionConfig(handle=self.resumption_token)
+            # else:
+            #      # Enable resumption for future sessions by including the config
+            #      config.session_resumption = types.SessionResumptionConfig()
+            
             self.gemini_session_ctx = self.client.aio.live.connect(model=MODEL_ID, config=config)
             self.log(f"Gemini Connect call initiated (Modality: {modality})...")
             self.gemini_session = await self.gemini_session_ctx.__aenter__()
@@ -119,6 +126,11 @@ class GeminiLiveIntegration:
                     self.to_gemini_queue.put_nowait(pkt)
             
             # Start tasks
+            if self.sender_task:
+                 self.sender_task.cancel()
+            if self.receiver_task:
+                 self.receiver_task.cancel()
+                 
             self.sender_task = asyncio.create_task(self.sender_loop())
             self.receiver_task = asyncio.create_task(self.receiver_loop())
             
@@ -153,8 +165,8 @@ class GeminiLiveIntegration:
                             continue
 
                         self.log("DEBUG: Sending keep-alive silence...")
-                        # Small 200ms silence packet
-                        silence = b'\x00' * 3200 
+                        # Small 200ms silence packet (6400 bytes = 3200 samples @ 16kHz)
+                        silence = b'\x00' * 6400 
                         try:
                              await self.gemini_session.send_realtime_input(
                                 media=types.Blob(data=silence, mime_type="audio/pcm;rate=16000")
@@ -168,6 +180,9 @@ class GeminiLiveIntegration:
                 if self.gemini_session and not isinstance(self.gemini_session, str):
                     if isinstance(item, bytes):
                         try:
+                            # Log every 100th packet to see flow
+                            if self.sound_counter % 100 == 0:
+                                self.log(f"DEBUG: sender_loop sending audio ({len(item)} bytes, Session: {self.gemini_session})")
                             await self.gemini_session.send_realtime_input(
                                 media=types.Blob(data=item, mime_type="audio/pcm;rate=16000")
                             )
@@ -193,11 +208,15 @@ class GeminiLiveIntegration:
         self.log("receiver_loop started")
         try:
             async for msg in self.gemini_session.receive():
-                # Log all message types for debugging
-                # self.log(f"RECV: {msg}") # Too spammy
+                # Verbose log for ALL messages
+                self.log(f"RECV TYPE: {type(msg)}")
                 if msg.server_content:
-                    # print(f"DEBUG_ATTRS: {dir(msg.server_content)}")
-                     pass
+                    self.log(f"RECV CONTENT: {msg.server_content}")
+                if msg.tool_call:
+                    self.log(f"RECV TOOL: {msg.tool_call}")
+                if msg.usage_metadata:
+                    self.log(f"RECV USAGE: {msg.usage_metadata}")
+                
                 # Usage Tracking
                 if msg.usage_metadata:
                     self.total_tokens = msg.usage_metadata.total_token_count
@@ -220,14 +239,11 @@ class GeminiLiveIntegration:
                     parts = msg.server_content.model_turn.parts
                     for part in parts:
                         if part.text:
-                            # CRITICAL: LOG THIS
                             self.log(f"[TRANSCRIPT MODEL REAL] {part.text}")
                             if self.current_modality == "TEXT":
-                                # Send to channel
                                 chan = self.mumble.channels.get(self.mumble.users.myself['channel_id'])
                                 chan.send_text_message(f"<b>Gemini:</b> {part.text}")
                         if part.inline_data:
-                            # Only play audio if we have permission to speak
                             if self.mumble.users.myself.get('mute') or self.mumble.users.myself.get('self_mute'):
                                 pass
                             else:
@@ -279,6 +295,7 @@ class GeminiLiveIntegration:
         result = await tools.dispatch_tool_call(self, call)
         # Send tool response
         if self.gemini_session:
+            self.log(f"DEBUG: Sending tool response for {call.name} (Result: {result[:50]}...)")
             await self.gemini_session.send(input=types.LiveClientToolResponse(
                 function_responses=[types.LiveClientFunctionResponse(
                     name=call.name, id=call.id, response={"result": result}
@@ -298,6 +315,10 @@ class GeminiLiveIntegration:
         handles activity detection, interruption, and pushes audio to the Gemini queue.
         """
         self.sound_counter += 1
+        
+        # Periodic debug log to trace if callback is invoked
+        if self.sound_counter % 100 == 0:
+            self.log(f"DEBUG: sound_received called {self.sound_counter} times")
         
         try:
             pcm_data = sound.pcm
@@ -322,15 +343,17 @@ class GeminiLiveIntegration:
                         chan.send_text_message("<i>👂 Waking up...</i>")
                     except: pass
             
-            # 2. Interruption Handling
-            # If the bot is speaking and the user speaks over it (RMS > Threshold), clear the buffer.
-            if hasattr(self, '_speaking') and self._speaking and rms > 500:
-                self.log(f"Interruption detected (RMS: {rms}) - Clearing local audio buffer")
-                self.mumble.sound_output.clear_buffer()
-                # We do NOT return here; we still want to send the user's interruption audio to Gemini
-                # so it knows to stop generating/change context.
-
-            if not self.gemini_session: 
+            # 2. Interruption Handling (Disabled for debugging Turn 2 silence)
+            # if hasattr(self, '_speaking') and self._speaking and rms > 500:
+            #     self.log(f"Interruption detected (RMS: {rms}) - Clearing local audio buffer")
+            #     self.mumble.sound_output.clear_buffer()
+            
+            # 3. Session-loss Buffering
+            # If the session is not ready, buffer the audio so we don't lose turns during reconnect.
+            if not self.gemini_session:
+                if not hasattr(self, 'audio_buffer'):
+                    self.audio_buffer = collections.deque(maxlen=100)
+                self.audio_buffer.append(resampled)
                 return
             
             name = user.get('name')
