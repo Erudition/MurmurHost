@@ -74,11 +74,24 @@ async def dispatch_tool_call(bot, call):
         elif name == "unmute_self":
             bot.mumble.users.myself.unmute()
         elif name == "change_room":
-            target = bot.mumble.channels.find_by_name(args["channel_name"])
-            if target:
-                bot.mumble.channels[target["channel_id"]].move_in()
+            chan_name = args.get("channel_name", "").strip()
+            if not chan_name:
+                result = "Error: channel_name is required."
             else:
-                result = f"Error: Channel {args['channel_name']} not found."
+                # Try exact match
+                target = bot.mumble.channels.find_by_name(chan_name)
+                # Try fuzzy match (case insensitive, partial)
+                if not target:
+                    for c in bot.mumble.channels.values():
+                        if chan_name.lower() in c['name'].lower() or c['name'].lower() in chan_name.lower():
+                            target = c
+                            break
+                
+                if target:
+                    bot.mumble.users.myself.move_in(target['channel_id'])
+                    result = f"Successfully moved to {target['name']}"
+                else:
+                    result = f"Error: Channel '{chan_name}' not found."
         elif name == "send_room_message":
             chan = bot.mumble.channels.get(bot.mumble.users.myself['channel_id'])
             chan.send_text_message(f"<b>{bot.bot_name}:</b> {args['message']}")
@@ -93,8 +106,10 @@ async def dispatch_tool_call(bot, call):
             else:
                 result = f"Error: User {args.get('username')} not found."
         elif name == "list_channels":
+            my_chan_id = bot.mumble.users.myself['channel_id']
+            my_chan = bot.mumble.channels.get(my_chan_id)
             channels = [c['name'] for c in bot.mumble.channels.values()]
-            result = f"Visible channels: {', '.join(channels)}"
+            result = f"Current Channel: {my_chan['name'] if my_chan else 'Unknown'}. All channels: {', '.join(channels)}"
         else:
             result = f"Error: Tool {name} not implemented."
     except Exception as e:

@@ -41,4 +41,25 @@ except asyncio.TimeoutError:
 - **text=" " Keep-Alive**: **FAILURE**. Turn 1 is silent.
 - **No Keep-Alive**: **FAILURE**. Turn 1 is silent.
 
-**Recommendation**: You **MUST** use the 200ms silence packet structure. Do not reduce size or change to text.
+**Recommendation**: You **MUST** use the 200ms silence packet structure (`b'\x00' * 6400` or similar). Do not reduce size or change to text.
+
+## 5. Comfort Noise & VAD Helper Regressions
+**Status**: WARNING
+**Description**: Attempts to "help" Gemini by interleaving silence (Comfort Noise) or appending silence (VAD Helper) failed.
+**Failure Mode**: Gemini becomes "confused" by the artificial silence gaps or the abrupt injection of large silence blocks, leading to Turn 1 failures or total silence.
+**Rule**: Send only **REAL** audio from the user, or a single heartbeat silence when completely idle for > 4s. Never interleave.
+
+## 6. Server Response Errors (Dashboard Monitoring)
+**Status**: CRITICAL
+**Description**: The following errors have been observed in the Google AI Dashboard. **Do not suppress these in the code.** They MUST be logged clearly.
+- **400 Bad Request**: Often due to malformed tool responses or config.
+- **404 Not Found**: Model ID or Resource issues.
+- **409 Conflict**: Overlapping session attempts (ensure `connecting_lock` usage).
+- **500 Internal Server Error**: Gemini-side failure (requires backoff/re-connection).
+- **501 Not Implemented**: feature/config mismatch.
+- **503 Service Unavailable**: Temporary unavailability (requires retry).
+
+## 7. Proactive Idle Reset
+**Status**: RECOMMENDED
+**Description**: To prevent `1008` (Policy Violation) and `1011` (Internal Error) on multi-turn conversations, the bot should proactively reset the session after 5 seconds of idle between turns.
+**Rationale**: Re-establishing a fresh connection ensures a clean slate for recognition and reduces the chance of server-side state corruption.

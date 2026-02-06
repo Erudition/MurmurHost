@@ -207,9 +207,12 @@ class SupervisorBot:
         # NOTE: Mic Check does NOT trigger Benny.
         studio_humans = stage_humans | audience_humans | backstage_humans | hallway_humans
         
+        if len(humans) > 0 and len(studio_humans) == 0:
+             # It's on the server but not in a monitored room
+             if time.time() % 30 < 5:
+                 print(f"DEBUG: Humans present ({len(humans)}) but none in Studio {list(humans)}. Monitored: Stage={len(stage_humans)} Hall={len(hallway_humans)}")
 
-
-        pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 30)
+        pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 600)
         
         return echo_should_be_on, rec_should_be_on, pod_should_be_on
 

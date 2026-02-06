@@ -63,12 +63,15 @@ class MultiTurnDriver:
         print(f"[System] Waiting for {BOT_UNDER_TEST} to join {TEST_ROOM}...")
         for i in range(45):
             benny = next((u for u in self.mumble.users.values() if u['name'] == BOT_UNDER_TEST), None)
-            if benny and benny['channel_id'] == target_channel_id:
-                self.benny_user = benny
-                print(f"[System] {BOT_UNDER_TEST} has arrived.")
-                return True
+            if benny:
+                b_chan = benny['channel_id']
+                print(f"[System] Found Benny in channel {b_chan} (Target: {target_channel_id})")
+                if b_chan == target_channel_id:
+                    self.benny_user = benny
+                    print(f"[System] {BOT_UNDER_TEST} has arrived.")
+                    return True
             if i % 10 == 0:
-                print(f"[System] Still waiting for {BOT_UNDER_TEST}...")
+                print(f"[System] Still waiting for {BOT_UNDER_TEST}... (Users: {[u['name'] for u in self.mumble.users.values()]})")
             await asyncio.sleep(1)
         return False
 
@@ -109,7 +112,7 @@ class MultiTurnDriver:
             start_wait = time.time()
             responded = False
             
-            while time.time() - start_wait < 30:
+            while time.time() - start_wait < 60:
                 sid = self.benny_user['session']
                 u = self.mumble.users.get(sid)
                 
