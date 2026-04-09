@@ -10,6 +10,12 @@ services:
       - ./murmur.ini:/etc/murmur.ini
     environment:
       - MUMBLE_CUSTOM_CONFIG_FILE=/etc/murmur.ini
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/64738'"]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
     networks:
       - podcast-net
 
@@ -25,7 +31,8 @@ services:
       - ./bots/supervisor/certs:/bots/certs
     restart: "no"
     depends_on:
-      - murmur
+      murmur:
+        condition: service_healthy
     network_mode: service:murmur
 
   benny-bot:
@@ -39,6 +46,9 @@ services:
       - ./bots/gemini:/bots
       - ./bots/gemini/certs:/bots/certs
     restart: "no"
+    depends_on:
+      murmur:
+        condition: service_healthy
     network_mode: service:murmur
 
   echo-bot:
@@ -51,6 +61,9 @@ services:
       - ./bots/echo/echobot.py:/bots/echobot.py
       - ./bots/echo/certs:/bots/certs
     restart: "no"
+    depends_on:
+      murmur:
+        condition: service_healthy
     network_mode: service:murmur
 
   recording-bot:
@@ -64,6 +77,9 @@ services:
       - ./bots/recorder/opus_recorder.py:/bots/opus_recorder.py
       - ./bots/recorder/certs:/bots/certs
     restart: "no"
+    depends_on:
+      murmur:
+        condition: service_healthy
     network_mode: service:murmur
 
   tester:
@@ -78,6 +94,9 @@ services:
       - ./bots/tester/clips:/bots/clips
       - ./bots/tester/certs:/bots/certs
     entrypoint: ["python3", "/bots/main.py"]
+    depends_on:
+      murmur:
+        condition: service_healthy
     network_mode: service:murmur
 
 networks:
