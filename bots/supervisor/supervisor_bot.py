@@ -21,9 +21,9 @@ class SupervisorBot:
         # Bot Lifecycle Management
         # { name: { 'container': container_name, 'kick_state_users': set(), 'should_be_online': bool, 'kick_wait': bool, 'last_start_attempt': timestamp, 'empty_timer_start': timestamp } }
         self.bots = {
-            "Echo": {"container": "echo-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0},
-            "Recording": {"container": "recording-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0},
-            "Benny Botman": {"container": "benny-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0}
+            "Echo": {"container": "echo-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "last_start_time": 0},
+            "Recording": {"container": "recording-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "last_start_time": 0, "empty_timer_start": 0},
+            "Benny Botman": {"container": "benny-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "last_start_time": 0, "empty_timer_start": 0}
         }
         
         self.verified_users = {} # {username: timestamp_last_seen}
@@ -279,10 +279,16 @@ class SupervisorBot:
                 try:
                     container = self.docker_client.containers.get(data['container'])
                     container.start()
+                    data['last_start_time'] = time.time()
                 except Exception as e:
                     print(f"Supervisor: Failed to start {name}: {e}")
                     
             elif not on and is_alive:
+                # Add 30s minimum uptime to prevent churn
+                uptime = time.time() - data.get('last_start_time', 0)
+                if uptime < 30:
+                    continue
+
                 print(f"Supervisor: Stopping container {data['container']}...")
                 try:
                     container = self.docker_client.containers.get(data['container'])
