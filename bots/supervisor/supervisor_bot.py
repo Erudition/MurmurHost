@@ -313,7 +313,7 @@ class SupervisorBot:
         print("Supervisor: All bots stopped.")
 
     async def run(self):
-        self.cleanup_zombies()
+        # self.cleanup_zombies()  # Disabled to avoid race conditions with Compose
         print(f"Connecting to Mumble at {MUMBLE_HOST}...")
         
         # Use persistent certificate for identity
@@ -362,17 +362,13 @@ class SupervisorBot:
                             data['kick_state_users'] = (stage_humans | audience_humans | backstage_humans | hallway_humans).copy()
                         print(f"Supervisor: {name} kick snapshot: {data['kick_state_users']}")
                 
-                # 3. Presence Logic
                 echo, rec, pod = self.get_presence_stats_from_info(humans, stage_humans, mic_check_humans, unverified_humans, audience_humans, backstage_humans, hallway_humans)
                 
                 # Update snapshots for kick-wait if they aren't online
                 for name in ["Recording", "Benny Botman"]:
-                    if self.bots[name]['kick_wait'] and not self.bots[name]['process']:
-                        # If we haven't captured snapshot yet or to keep it updated?
-                        # User says: "If kicked, it stays gone, until Jordan joins... OR until I leave and re-enter"
-                        # That implies we snap at the moment of kick.
+                    data = self.bots[name]
+                    if self.bots[name]['kick_wait'] and not self.is_bot_alive(data):
                         if 'kick_state_users' not in self.bots[name] or not self.bots[name]['kick_state_users']:
-                            # This is approximate since we check 5s later, but good enough.
                             pass 
 
                 self.manage_processes(echo, rec, pod)
