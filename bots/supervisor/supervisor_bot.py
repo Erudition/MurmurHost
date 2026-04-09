@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 import time
-import subprocess
+import docker
 import pymumble_py3 as pymumble
 from pymumble_py3.constants import *
 
@@ -16,27 +16,32 @@ class SupervisorBot:
     def __init__(self):
         self.mumble = None
         self.is_running = True
+        self.docker_client = docker.from_env()
         
         # Bot Lifecycle Management
-        # { name: { 'process': proc, 'kick_state_users': set(), 'should_be_online': bool, 'kick_wait': bool, 'last_start_attempt': timestamp, 'empty_timer_start': timestamp } }
+        # { name: { 'container': container_name, 'kick_state_users': set(), 'should_be_online': bool, 'kick_wait': bool, 'last_start_attempt': timestamp, 'empty_timer_start': timestamp } }
         self.bots = {
-            "Echo": {"script": "/bots/echobot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0},
-            "Recording": {"script": "/bots/opus_recorder.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0},
-            "Benny Botman": {"script": "/bots/gemini-bot/pipecat_bot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0}
+            "Echo": {"container": "echo-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0},
+            "Recording": {"container": "recording-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0},
+            "Benny Botman": {"container": "benny-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0}
         }
         
         self.verified_users = {} # {username: timestamp_last_seen}
         self.user_mic_check_entry = {} # {username: entry_timestamp}
         
     def cleanup_zombies(self):
-        """Kills any lingering bot processes from previous sessions."""
-        print("Supervisor: Cleaning up zombie bots...")
-        zombies = ["echobot.py", "opus_recorder.py", "gemini-bot/bot.py"]
-        for z in zombies:
+        """Ensures managed containers are stopped on start if they shouldn't be on."""
+        print("Supervisor: Checking for lingering containers...")
+        for name, data in self.bots.items():
             try:
-                subprocess.run(["pkill", "-f", z], check=False)
+                container = self.docker_client.containers.get(data['container'])
+                if container.status == "running":
+                    print(f"Supervisor: Stopping lingering container {data['container']}")
+                    container.stop()
+            except docker.errors.NotFound:
+                pass
             except Exception as e:
-                print(f"Error killing {z}: {e}")
+                print(f"Error during cleanup of {data['container']}: {e}")
 
     def mumble_connected(self):
         print(f"Supervisor Connected to Mumble as {BOT_NAME}")
@@ -79,13 +84,20 @@ class SupervisorBot:
 
 
 
+    def is_bot_alive(self, bot_data):
+        try:
+            container = self.docker_client.containers.get(bot_data['container'])
+            return container.status == "running"
+        except:
+            return False
+
     def update_status_comment(self):
         """Updates the Supervisor's User Comment with the status of all bots and reasons."""
         report = "<b>Studio Supervisor Status</b><br/>"
         report += f"<i>Last Updated: {time.strftime('%H:%M:%S')}</i><br/><br/>"
         
         for name, data in self.bots.items():
-            status = "🟢 Online" if data['process'] and data['process'].poll() is None else "🔴 Offline"
+            status = "🟢 Online" if self.is_bot_alive(data) else "🔴 Offline"
             reason = ""
             if status == "🔴 Offline":
                 if name == "Echo":
@@ -203,15 +215,8 @@ class SupervisorBot:
         # REC/PODBOT LOGIC:
         rec_should_be_on = self.check_presence_with_timer("Recording", stage_humans, 60)
         
-        # Benny Botman joins when Studio subrooms (Stage, Audience, Backstage) OR Hallway descendants are occupied
-        # NOTE: Mic Check does NOT trigger Benny.
         studio_humans = stage_humans | audience_humans | backstage_humans | hallway_humans
-        
-        if len(humans) > 0 and len(studio_humans) == 0:
-             # It's on the server but not in a monitored room
-             if time.time() % 30 < 5:
-                 print(f"DEBUG: Humans present ({len(humans)}) but none in Studio {list(humans)}. Monitored: Stage={len(stage_humans)} Hall={len(hallway_humans)}")
-
+        print(f"DEBUG: Pod should be on? Studio humans: {studio_humans}")
         pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 600)
         
         return echo_should_be_on, rec_should_be_on, pod_should_be_on
@@ -227,7 +232,7 @@ class SupervisorBot:
             return self.check_kick_aware_presence(bot_name, current_humans)
         else:
             # If empty, check timer
-            if data['process'] and data['process'].poll() is None:
+            if self.is_bot_alive(data):
                 if data['empty_timer_start'] == 0:
                     data['empty_timer_start'] = time.time()
                 
@@ -242,8 +247,8 @@ class SupervisorBot:
     def check_kick_aware_presence(self, bot_name, current_humans):
         data = self.bots[bot_name]
         
-        # If process is running, we aren't in a "Kicked" state waiting for re-entry.
-        if data['process'] and data['process'].poll() is None:
+        # If container is running, we aren't in a "Kicked" state waiting for re-entry.
+        if self.is_bot_alive(data):
             return True
 
         # If stage/studio is empty, definitely stay off.
@@ -272,53 +277,40 @@ class SupervisorBot:
         
         for name, on in [("Echo", echo), ("Recording", rec), ("Benny Botman", pod)]:
             data = self.bots[name]
-            is_alive = data['process'] and data['process'].poll() is None
+            is_alive = self.is_bot_alive(data)
             
             if on and not is_alive:
-                # Cooldown check
                 if time.time() - data.get('last_start_attempt', 0) < 20:
                     continue
 
-                print(f"Supervisor: Starting {name}...")
+                print(f"Supervisor: Starting container {data['container']}...")
                 data['last_start_attempt'] = time.time()
-                # Special naming for bots handled in their scripts via args or env
-                cmd = ["python3", "-u", data['script'], "--host", MUMBLE_HOST, "--name", name]
-                
                 try:
-                    data['process'] = subprocess.Popen(cmd)
+                    container = self.docker_client.containers.get(data['container'])
+                    container.start()
                 except Exception as e:
                     print(f"Supervisor: Failed to start {name}: {e}")
                     
             elif not on and is_alive:
-                print(f"Supervisor: Stopping {name}...")
-                # Update kick state if it was running and we are stopping it (or it was kicked)
-                # But here we are stopping it intentionally? 
-                # Actually, if the process dies UNEXPECTEDLY, poll() will be not None.
-                data['process'].terminate()
-                data['process'] = None
+                print(f"Supervisor: Stopping container {data['container']}...")
+                try:
+                    container = self.docker_client.containers.get(data['container'])
+                    container.stop()
+                except Exception as e:
+                    print(f"Supervisor: Failed to stop {name}: {e}")
 
     def graceful_shutdown(self):
-        """Gracefully stop all child bots before container restart."""
+        """Stop all managed containers."""
         print("Supervisor: Graceful shutdown - stopping all bots...")
         for name, data in self.bots.items():
-            if data['process'] and data['process'].poll() is None:
-                print(f"Supervisor: Terminating {name}...")
-                data['process'].terminate()
-        
-        # Wait for processes to exit (up to 5 seconds)
-        import time
-        deadline = time.time() + 5
-        for name, data in self.bots.items():
-            if data['process']:
-                remaining = max(0, deadline - time.time())
+            if self.is_bot_alive(data):
                 try:
-                    data['process'].wait(timeout=remaining)
-                    print(f"Supervisor: {name} exited cleanly.")
-                except subprocess.TimeoutExpired:
-                    print(f"Supervisor: {name} did not exit in time, killing...")
-                    data['process'].kill()
-        
-        print("Supervisor: All bots stopped. Exiting...")
+                    print(f"Supervisor: Stopping {name}...")
+                    container = self.docker_client.containers.get(data['container'])
+                    container.stop(timeout=5)
+                except:
+                    pass
+        print("Supervisor: All bots stopped.")
 
     async def run(self):
         self.cleanup_zombies()
@@ -356,12 +348,14 @@ class SupervisorBot:
                 humans, stage_humans, mic_check_humans, unverified_humans, audience_humans, backstage_humans, hallway_humans = self.get_presence_info()
 
                 for name, data in self.bots.items():
-                    if data['process'] and data['process'].poll() is not None:
-                        print(f"Supervisor: {name} exited unexpectedly (Kicked?).")
-                        data['process'] = None
+                    if self.is_bot_alive(data):
+                        # Still running, check for unexpected exit here?
+                        # Docker SDK doesn't give us a non-polling way easily in this loop.
+                        pass
+                    elif data.get('should_be_online') and not self.is_bot_alive(data):
+                        # It should be on but isn't. Probably kicked or crashed.
+                        print(f"Supervisor: {name} is offline unexpectedly (Kicked?).")
                         data['kick_wait'] = True
-                        # Spec says: "Stay offline until a positive change in Stage/Studio occupancy occurs"
-                        # Snap the current relevant group
                         if name == "Recording":
                             data['kick_state_users'] = stage_humans.copy()
                         else:

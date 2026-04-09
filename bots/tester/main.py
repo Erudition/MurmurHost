@@ -62,21 +62,38 @@ class MultiTurnDriver:
     async def wait_for_benny(self, target_channel_id):
         print(f"[System] Waiting for {BOT_UNDER_TEST} to join {TEST_ROOM}...")
         for i in range(45):
+            # Always look up fresh user state
             benny = next((u for u in self.mumble.users.values() if u['name'] == BOT_UNDER_TEST), None)
             if benny:
                 b_chan = benny['channel_id']
-                print(f"[System] Found Benny in channel {b_chan} (Target: {target_channel_id})")
                 if b_chan == target_channel_id:
                     self.benny_user = benny
-                    print(f"[System] {BOT_UNDER_TEST} has arrived.")
-                    return True
+                    print(f"[System] {BOT_UNDER_TEST} has arrived in channel {b_chan}. Waiting for bot to UNMUTE...")
+                    
+                    # Wait for unmute (max 25s)
+                    for wait_tick in range(50):
+                        # Re-fetch state for this session
+                        u_state = self.mumble.users.get(benny['session'])
+                        is_muted = u_state.get('self_mute', True) if u_state else True
+                        
+                        if not is_muted:
+                            print(f"[System] {BOT_UNDER_TEST} is UNMUTED and listening after {wait_tick * 0.5}s.")
+                            return True
+                        
+                        if wait_tick % 10 == 0:
+                            print(f"  [Wait] Still muted... (Tick {wait_tick})")
+                        await asyncio.sleep(0.5)
+                    
+                    print(f"[FAIL] {BOT_UNDER_TEST} joined but timed out waiting for UNMUTE.")
+                    return False
+            
             if i % 10 == 0:
-                print(f"[System] Still waiting for {BOT_UNDER_TEST}... (Users: {[u['name'] for u in self.mumble.users.values()]})")
+                print(f"[System] Still waiting for {BOT_UNDER_TEST} to join... (Users: {[u['name'] for u in self.mumble.users.values()]})")
             await asyncio.sleep(1)
         return False
 
     def play_clip(self, filename):
-        path = f"/bots/test-speech-clips/{filename}"
+        path = f"/bots/clips/{filename}"
         print(f"[Driver] Playing {filename}...")
         cmd = ["ffmpeg", "-i", path, "-f", "s16le", "-ac", "1", "-ar", "48000", "-"]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)

@@ -13,38 +13,77 @@ services:
     networks:
       - podcast-net
 
-  mumo:
-    build: ./bots/mumo
-    restart: "no"
-    volumes:
-      - ./bots/mumo:/data
-    depends_on:
-      - murmur
-    networks:
-      - podcast-net
-
-  custom-bots:
-    build: ./bots
-    container_name: custom-bots
+  supervisor:
+    build: ./bots/supervisor
+    container_name: mumble-supervisor
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - ./recordings:/bots/recordings
-      - ./bots/supervisor_bot.py:/bots/supervisor_bot.py
-      - ./bots/echobot.py:/bots/echobot.py
-      - ./bots/opus_recorder.py:/bots/opus_recorder.py
-      - ./bots/test_bot.py:/bots/test_bot.py
-      - ./bots/gemini-bot:/bots/gemini-bot
-      - ./bots/certs:/bots/certs
-      - ./bots/test-speech-clips:/bots/test-speech-clips
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./bots/supervisor/supervisor_bot.py:/bots/supervisor_bot.py
+      - ./bots/supervisor/certs:/bots/certs
     restart: "no"
     depends_on:
       - murmur
     networks:
       - podcast-net
 
+  benny-bot:
+    build: ./bots/gemini
+    container_name: benny-bot
+    profiles: ["bots"]
+    environment:
+      - MUMBLE_HOST=murmur
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./bots/gemini:/bots
+      - ./bots/gemini/certs:/bots/certs
+    restart: "no"
+    networks:
+      - podcast-net
+
+  echo-bot:
+    build: ./bots/echo
+    container_name: echo-bot
+    profiles: ["bots"]
+    environment:
+      - MUMBLE_HOST=murmur
+    volumes:
+      - ./bots/echo/echobot.py:/bots/echobot.py
+      - ./bots/echo/certs:/bots/certs
+    restart: "no"
+    networks:
+      - podcast-net
+
+  recording-bot:
+    build: ./bots/recorder
+    container_name: recording-bot
+    profiles: ["bots"]
+    environment:
+      - MUMBLE_HOST=murmur
+    volumes:
+      - ./recordings:/bots/recordings
+      - ./bots/recorder/opus_recorder.py:/bots/opus_recorder.py
+      - ./bots/recorder/certs:/bots/certs
+    restart: "no"
+    networks:
+      - podcast-net
+
+  tester:
+    build: ./bots/gemini
+    container_name: mumble-tester
+    profiles: ["test"]
+    environment:
+      - MUMBLE_HOST=murmur
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./bots/tester/main.py:/bots/main.py
+      - ./bots/tester/clips:/bots/clips
+      - ./bots/tester/certs:/bots/certs
+    entrypoint: ["python3", "/bots/main.py"]
+    networks:
+      - podcast-net
 
 networks:
   podcast-net:
