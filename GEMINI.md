@@ -15,7 +15,6 @@
 
 ## Pymumble Technical Notes
 - **pymumble is TCP-only by design.** It tunnels audio over the TCP control channel (UDPTUNNEL message type). It has no UDP implementation (`udp_active = False`, `# TODO: use UDP audio`).
-- **Monkey-patch vs callback:** The `PYMUMBLE_CLBK_SOUNDRECEIVED` callback provides decoded PCM audio. To capture raw Opus frames (needed by `OggOpusWriter`), the `SoundQueue.add` monkey-patch is required — it intercepts the audio before decoding.
 
 ## Mumble ACL Notes
 - **Linked-channel audio requires Speak in the destination.** When channels are linked, Murmur checks whether the speaker has `Speak` permission in each *destination* channel before forwarding audio there. If the Root channel denies `Speak` for `@all`, linked audio will be silently dropped unless the destination channel explicitly overrides it.

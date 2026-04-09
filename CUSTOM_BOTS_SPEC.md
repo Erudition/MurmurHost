@@ -6,14 +6,14 @@ This document outlines the technical specifications and requirements for the cus
 ## Bot Presence
 - All presence (and mute status) logic should be Event-driven
     - Do NOT create constant polling loops to check status unless events are confirmed to be unavailable
+- Running status of a bot's container should be coupled to presence in server
 - **Supervisor Presence**:
     - Room: Root
         - When moved, return to Root immediately
     - Joins when server starts
     - Never leaves
     - When kicked from server:
-        - Restart entire `custom bots` container
-            - Gracefully - e.g. Recordings in progress save properly
+        - Restarts own container (which triggers restart of other bots)
 - **Echo Bot Presence**:
     - Joins when:
         - mic-unverified humans are present anywhere on the server 
@@ -29,9 +29,11 @@ This document outlines the technical specifications and requirements for the cus
         - Stage is occupied by any human
     - Channel: Audience only
     - Leaves server when:
-        - Stage is empty for 60 seconds
+        - Stage is empty for 30 seconds
     - When kicked from server:
         - Stay offline until a positive change in Stage occupancy occurs (i.e., a person joins)
+    - Container:
+        - Must exit and shut down gracefully - e.g. recordings in progress save properly
 - **Live AI Bot Presence**:
     - Joins server when:
         - Studio channels OR Hallway channels are occupied by any human
@@ -67,7 +69,6 @@ Central orchestrator for all bot activity and presence management.
 - Name: always "Supervisor"
 - Always connected, in the Root channel, deafened, and muted.
 - Manages other bots as subprocesses.
-- Implements a 20-second cooldown between start attempts of the same bot to prevent "Username already in use" errors.
 - Periodically updates its own **User Comment** with a detailed report of all bots' status and verification counts.
 
 ---

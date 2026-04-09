@@ -162,7 +162,7 @@ class OpusRecorderBot:
     
     def connected(self):
         self.session_prefix = time.strftime("%Y-%m-%d")
-        print(f">>> Recorder: Connected to server (pymumble uses TCP tunnel for audio).")
+        print(f">>> Recorder: Connected via TCP tunnel.")
         self.mumble.users.myself.unmute()
         self.mumble.users.myself.undeafen()
         start_wait = time.time()
