@@ -42,7 +42,7 @@ class SimpleEchoBot:
         print("EchoBot: Waiting for server synchronization...")
         self.mumble.is_ready() 
         
-        print(f"EchoBot: Synchronized as {self.mumble.users.myself.get('name')} (ID: {self.mumble.users.myself.get('session')})")
+        print(f"EchoBot: Synchronized via TCP tunnel (Mumble session: {self.mumble.users.myself.get('session')})")
         
         # Audio is already enabled pre-connection to avoid race conditions.
         try:

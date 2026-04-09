@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import docker
+import json
 import pymumble_py3 as pymumble
 from pymumble_py3.constants import *
 
@@ -11,6 +12,7 @@ MUMBLE_HOST = os.getenv("MUMBLE_HOST", "murmur")
 BOT_NAME = "Supervisor"
 TARGET_STAGE = "🎙️ Stage 🔴"
 MIC_CHECK_CHANNEL = "Mic Check 🎧"
+HEALTH_FILE = "/tmp/supervisor_health"
 
 class SupervisorBot:
     def __init__(self):
@@ -21,9 +23,9 @@ class SupervisorBot:
         # Bot Lifecycle Management
         # { name: { 'container': container_name, 'kick_state_users': set(), 'should_be_online': bool, 'kick_wait': bool, 'last_start_attempt': timestamp, 'empty_timer_start': timestamp } }
         self.bots = {
-            "Echo": {"container": "echo-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0},
-            "Recording": {"container": "recording-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0},
-            "Benny Botman": {"container": "benny-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0}
+            "Echo": {"container": "echo-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "last_start_time": 0},
+            "Recording": {"container": "recording-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "last_start_time": 0, "empty_timer_start": 0},
+            "Benny Botman": {"container": "benny-bot", "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "last_start_time": 0, "empty_timer_start": 0}
         }
         
         self.verified_users = {} # {username: timestamp_last_seen}
@@ -205,7 +207,7 @@ class SupervisorBot:
         echo_should_be_on = len(humans) > 0 and (len(mic_check_humans) > 0 or unverified_humans)
         
         # REC/PODBOT LOGIC:
-        rec_should_be_on = self.check_presence_with_timer("Recording", stage_humans, 60)
+        rec_should_be_on = self.check_presence_with_timer("Recording", stage_humans, 30)
         
         studio_humans = stage_humans | audience_humans | backstage_humans | hallway_humans
         pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 600)
@@ -218,21 +220,29 @@ class SupervisorBot:
         
         # If occupied, reset timer and potentially trigger "on"
         if is_occupied:
-            data['empty_timer_start'] = 0
-            # Also handle kick-wait logic here
+            data['empty_timer_start'] = -1  # Mark as "having seen humans"
             return self.check_kick_aware_presence(bot_name, current_humans)
         else:
-            # If empty, check timer
+            # If empty, check if we should keep it alive
             if self.is_bot_alive(data):
-                if data['empty_timer_start'] == 0:
+                # If it's 0, it means we just found it alive but room was already empty.
+                if data.get('empty_timer_start', 0) == 0:
+                    return False
+                
+                # If -1, we just transitioned to empty. Start the timer.
+                if data['empty_timer_start'] == -1:
                     data['empty_timer_start'] = time.time()
+                    print(f"Supervisor: {bot_name} room is now empty. Starting {timeout}s grace period.")
                 
                 elapsed = time.time() - data['empty_timer_start']
                 if elapsed < timeout:
                     return True # Keep it on for now
                 else:
+                    print(f"Supervisor: {bot_name} grace period expired.")
                     return False # Leave
             else:
+                # Reset if it's already dead
+                data['empty_timer_start'] = 0
                 return False
 
     def check_kick_aware_presence(self, bot_name, current_humans):
@@ -279,10 +289,16 @@ class SupervisorBot:
                 try:
                     container = self.docker_client.containers.get(data['container'])
                     container.start()
+                    data['last_start_time'] = time.time()
                 except Exception as e:
                     print(f"Supervisor: Failed to start {name}: {e}")
                     
             elif not on and is_alive:
+                # Add 30s minimum uptime to prevent churn
+                uptime = time.time() - data.get('last_start_time', 0)
+                if uptime < 30:
+                    continue
+
                 print(f"Supervisor: Stopping container {data['container']}...")
                 try:
                     container = self.docker_client.containers.get(data['container'])
@@ -301,10 +317,17 @@ class SupervisorBot:
                     container.stop(timeout=5)
                 except:
                     pass
+        
+        if os.path.exists(HEALTH_FILE):
+            try:
+                os.remove(HEALTH_FILE)
+            except:
+                pass
+        
         print("Supervisor: All bots stopped.")
 
     async def run(self):
-        # self.cleanup_zombies()  # Disabled to avoid race conditions with Compose
+        self.cleanup_zombies()  # SPEC: Restarting supervisor triggers restart of managed bots
         print(f"Connecting to Mumble at {MUMBLE_HOST}...")
         
         # Use persistent certificate for identity
@@ -366,6 +389,15 @@ class SupervisorBot:
 
                 self.manage_processes(echo, rec, pod)
                 self.update_status_comment()
+                
+                # 3. Update Health Heartbeat
+                if self.mumble and self.mumble.is_alive():
+                    with open(HEALTH_FILE, "w") as f:
+                        json.dump({
+                            "status": "connected",
+                            "host": MUMBLE_HOST,
+                            "timestamp": time.time()
+                        }, f)
                 
             except Exception as e:
                 print(f"Supervisor Loop Error: {e}")
