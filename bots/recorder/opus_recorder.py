@@ -8,6 +8,7 @@ import datetime
 import pymumble_py3 as pymumble
 from pymumble_py3.constants import *
 from pymumble_py3.soundqueue import SoundQueue
+
 from mumblerecbot.webvtt import WebVtt
 
 # Global reference for signal handler
@@ -86,18 +87,15 @@ class OggOpusWriter:
             self.page_seq += 1
         self.file.close()
 
-# --- MONKEY PATCH ---
+# --- MONKEY PATCH (captures raw Opus before decoding) ---
 original_sound_queue_add = SoundQueue.add
 def patched_sound_queue_add(self, audio, sequence, type, target):
     if not hasattr(self, 'raw_packets'):
         self.raw_packets = collections.deque()
-    if type == 4:
+    if type == 4:  # OPUS
         if len(self.raw_packets) == 0:
-            print(f"DEBUG: First packet captured for user session {target}")
+            print(f"DEBUG: First raw Opus packet captured (session target={target})")
         self.raw_packets.append({'data': audio, 'time': time.time()})
-    elif type != 4:
-        # Log if we are getting non-opus audio (Speex/CelT)
-        print(f"DEBUG: Received non-Opus audio (type {type}) for session {target}")
     return original_sound_queue_add(self, audio, sequence, type, target)
 SoundQueue.add = patched_sound_queue_add
 
@@ -140,16 +138,31 @@ class OpusRecorderBot:
         self.mumble.set_receive_sound(True)
         
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CONNECTED, self.connected)
+        self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received_diagnostic)
         self.channel_name = "Audience 👂" # Default to Audience (hears Stage)
         self.start_time = 0
         self.user_stats = collections.defaultdict(lambda: {'packets': 0, 'bytes': 0})
+        self._diag_first_sound = set()  # Track first audio per user for diagnostics
         
         self.mumble.start()
     
+    def sound_received_diagnostic(self, user, sound):
+        """Diagnostic callback — logs when audio arrives from each user.
+        The actual recording uses the monkey-patched SoundQueue.add for raw Opus."""
+        session = user['session']
+        if session not in self._diag_first_sound:
+            self._diag_first_sound.add(session)
+            name = user.get('name', f'session-{session}')
+            my_channel = self.mumble.users.myself.get('channel_id', '?')
+            user_channel = user.get('channel_id', '?')
+            same = 'SAME' if my_channel == user_channel else 'LINKED'
+            print(f">>> AUDIO DIAG: First decoded audio from {name} (session {session}, channel {user_channel}, {same} channel)")
+    
     def connected(self):
-        print(f">>> Recorder: Connected to server.")
-        
-        # Buffer wait for sync
+        self.session_prefix = time.strftime("%Y-%m-%d")
+        print(f">>> Recorder: Connected to server (pymumble uses TCP tunnel for audio).")
+        self.mumble.users.myself.unmute()
+        self.mumble.users.myself.undeafen()
         start_wait = time.time()
         while not is_ready(self.mumble):
             time.sleep(0.1)
@@ -176,10 +189,9 @@ class OpusRecorderBot:
         comment = f"<b>Recording ACTIVE</b><br/>Session: <code>{self.session_prefix}</code><br/><hr/>"
         for session, stats in self.user_stats.items():
             user = self.mumble.users.get(session)
-            if user:
-                if stats['packets'] > 0:
-                    bitrate = (stats['bytes'] * 8) / (stats['packets'] * 0.02) / 1000
-                    comment += f"• {user['name']}: {bitrate:.1f} kbps<br/>"
+            if user and 'name' in user:
+                bitrate = (stats['bytes'] * 8) / (max(1, time.time() - self.start_time) * 1024)
+                comment += f"• {user['name']}: {bitrate:.1f} kbps<br/>"
         self.mumble.users.myself.comment(comment)
 
     def start_recording(self):
@@ -275,7 +287,7 @@ def graceful_shutdown(signum, frame):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="murmur")
+    parser.add_argument("--host", default=os.getenv("MUMBLE_HOST", "murmur"))
     parser.add_argument("--port", type=int, default=64738)
     parser.add_argument("--channel", default="Audience 👂")
     parser.add_argument("--name", default=None)

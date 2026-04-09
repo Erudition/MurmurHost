@@ -42,6 +42,11 @@ class SimpleEchoBot:
         print("EchoBot: Waiting for server synchronization...")
         self.mumble.is_ready() 
         
+        has_udp = getattr(self.mumble, 'is_udp', 'unknown')
+        if has_udp == 'unknown':
+            has_udp = True if getattr(self.mumble, 'udp_socket', None) else False
+        print(f"EchoBot: Connected via {'UDP' if has_udp else 'TCP Fallback'}")
+        
         print(f"EchoBot: Synchronized as {self.mumble.users.myself.get('name')} (ID: {self.mumble.users.myself.get('session')})")
         
         # Audio is already enabled pre-connection to avoid race conditions.
