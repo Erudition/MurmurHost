@@ -14,8 +14,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /bots
 
-RUN pip3 install --no-cache-dir \
-    pymumble==1.7
+RUN pip3 install --no-cache-dir git+https://github.com/azlux/pymumble.git
 
 COPY echobot.py .
 
