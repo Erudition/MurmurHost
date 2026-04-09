@@ -4,7 +4,7 @@ services:
     ports:
       - "64738:64738"
       - "64738:64738/udp"
-    restart: always
+    restart: "no"
     volumes:
       - ./murmur.sqlite:/data/mumble-server.sqlite
       - ./murmur.ini:/etc/murmur.ini
@@ -15,7 +15,7 @@ services:
 
   mumo:
     build: ./bots/mumo
-    restart: always
+    restart: "no"
     volumes:
       - ./bots/mumo:/data
     depends_on:
@@ -39,53 +39,12 @@ services:
       - ./bots/gemini-bot:/bots/gemini-bot
       - ./bots/certs:/bots/certs
       - ./bots/test-speech-clips:/bots/test-speech-clips
-    restart: unless-stopped
+    restart: "no"
     depends_on:
       - murmur
     networks:
       - podcast-net
 
-  db-nextcloud:
-    image: mariadb:10.11
-    restart: always
-    command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW
-    volumes:
-      - ./nextcloud_db:/var/lib/mysql
-    environment:
-      - MYSQL_ROOT_PASSWORD=nextcloud
-      - MYSQL_PASSWORD=nextcloud
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-    networks:
-      - podcast-net
-
-  redis:
-    image: redis:alpine
-    restart: always
-    networks:
-      - podcast-net
-
-  nextcloud:
-    image: nextcloud
-    restart: always
-    ports:
-      - "8080:80"
-    depends_on:
-      - db-nextcloud
-      - redis
-    volumes:
-      - ./nextcloud_data:/var/www/html
-    environment:
-      - MYSQL_PASSWORD=nextcloud
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-      - MYSQL_HOST=db-nextcloud
-      - REDIS_HOST=redis
-      - NEXTCLOUD_ADMIN_USER=admin
-      - NEXTCLOUD_ADMIN_PASSWORD=adminpassword123
-      - NEXTCLOUD_TRUSTED_DOMAINS=141.148.11.127 localhost
-    networks:
-      - podcast-net
 
 networks:
   podcast-net:
