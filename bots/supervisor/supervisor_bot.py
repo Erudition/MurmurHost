@@ -204,19 +204,10 @@ class SupervisorBot:
         # ECHO BOT LOGIC:
         echo_should_be_on = len(humans) > 0 and (len(mic_check_humans) > 0 or unverified_humans)
         
-        # Debug Echo Logic
-        if echo_should_be_on:
-             print(f"DEBUG: Echo ON. Humans: {len(humans)}, MicCheck: {len(mic_check_humans)}, Unverified: {unverified_humans}")
-             if unverified_humans:
-                 verified_names = self.verified_users.keys()
-                 unverified_names = [h for h in humans if h not in verified_names]
-                 print(f"DEBUG: Unverified Users: {unverified_names}")
-        
         # REC/PODBOT LOGIC:
         rec_should_be_on = self.check_presence_with_timer("Recording", stage_humans, 60)
         
         studio_humans = stage_humans | audience_humans | backstage_humans | hallway_humans
-        print(f"DEBUG: Pod should be on? Studio humans: {studio_humans}")
         pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 600)
         
         return echo_should_be_on, rec_should_be_on, pod_should_be_on
@@ -354,8 +345,10 @@ class SupervisorBot:
                         pass
                     elif data.get('should_be_online') and not self.is_bot_alive(data):
                         # It should be on but isn't. Probably kicked or crashed.
-                        print(f"Supervisor: {name} is offline unexpectedly (Kicked?).")
-                        data['kick_wait'] = True
+                        # Add 20s grace period for bot to start up
+                        if time.time() - data.get('last_start_attempt', 0) > 20:
+                            print(f"Supervisor: {name} is offline unexpectedly (Kicked?).")
+                            data['kick_wait'] = True
                         if name == "Recording":
                             data['kick_state_users'] = stage_humans.copy()
                         else:
