@@ -14,5 +14,11 @@
 - **Verify presence server-side.** When the user reports a bot is missing, check Murmur's logs for an `Authenticated` entry in the current boot — not just the bot container's own logs, which may reflect a zombie connection.
 
 ## Pymumble Technical Notes
-- **pymumble is TCP-only by design.** It tunnels audio over the TCP control channel (UDPTUNNEL message type). It has no UDP implementation (`udp_active = False`, `# TODO: use UDP audio`). Do not try to diagnose "UDP fallback" issues — they are not real.
+- **pymumble is TCP-only by design.** It tunnels audio over the TCP control channel (UDPTUNNEL message type). It has no UDP implementation (`udp_active = False`, `# TODO: use UDP audio`).
 - **Monkey-patch vs callback:** The `PYMUMBLE_CLBK_SOUNDRECEIVED` callback provides decoded PCM audio. To capture raw Opus frames (needed by `OggOpusWriter`), the `SoundQueue.add` monkey-patch is required — it intercepts the audio before decoding.
+
+## Mumble ACL Notes
+- **Linked-channel audio requires Speak in the destination.** When channels are linked, Murmur checks whether the speaker has `Speak` permission in each *destination* channel before forwarding audio there. If the Root channel denies `Speak` for `@all`, linked audio will be silently dropped unless the destination channel explicitly overrides it.
+- **Use `@out` to allow linked audio without allowing local speech.** To keep a channel listen-only (e.g. Audience) while still receiving linked audio from another channel (e.g. Stage), grant `Speak` to `@out` on the listen-only channel. Users physically *in* the channel (`@in`) remain muted; only users *outside* (`@out`, i.e. the linked speakers) get the grant.
+- **ACL evaluation is per-channel, bottom-up.** Rules on a specific channel override inherited rules from parents. Priority ordering within a channel matters — higher priority rules are evaluated last and take precedence.
+- **Permission bitmask reference:** Write=1, Traverse=2, Enter=4, Speak=8, Whisper=16, Move=32, MakeChannel=64, LinkChannel=128, AltSpeak=256, TextMessage=512, MakeTempChannel=1024, Listen=2048.
