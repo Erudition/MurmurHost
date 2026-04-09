@@ -22,7 +22,7 @@ class SupervisorBot:
         self.bots = {
             "Echo": {"script": "/bots/echobot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0},
             "Recording": {"script": "/bots/opus_recorder.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0},
-            "Benny Botman": {"script": "/bots/gemini-bot/bot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0}
+            "Benny Botman": {"script": "/bots/gemini-bot/pipecat_bot.py", "process": None, "should_be_online": False, "kick_wait": False, "kick_state_users": set(), "last_start_attempt": 0, "empty_timer_start": 0}
         }
         
         self.verified_users = {} # {username: timestamp_last_seen}

@@ -110,21 +110,46 @@ class GeminiLiveIntegration:
                 
                 # 3. Configure and Connect
                 # We use local context-injection memory for stability
+                system_instruction_text = self.get_system_prompt()
+                
+                # INJECT MEMORY: Append history to system prompt
+                if hasattr(self, 'conversation_memory') and self.conversation_memory:
+                    history_text = "\n\n### CONVERSATION HISTORY (Previous Turns)\n"
+                    for turn in self.conversation_memory:
+                        history_text += f"- User: {turn['user']}\n- You: {turn['model']}\n"
+                    system_instruction_text += history_text
+                    self.log(f"Injected {len(self.conversation_memory)} turns of history into system prompt.")
+
                 config = types.LiveConnectConfig(
                     response_modalities=[modality],
-                    system_instruction=types.Content(parts=[types.Part(text=self.get_system_prompt())]),
-                    tools=tools_def, 
+                    system_instruction=types.Content(parts=[types.Part(text=system_instruction_text)]),
+                    # BARE BONES MODE: No Tools
+                    # tools=tools_def, 
                     speech_config=types.SpeechConfig(
                         voice_config=types.VoiceConfig(
                             prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE_NAME)
                         )
                     ),
-                    output_audio_transcription=types.AudioTranscriptionConfig(),
-                    input_audio_transcription=types.AudioTranscriptionConfig(),
+                    # BARE BONES MODE: Manual VAD only (relies on Mumble sending audio)
+                    # realtime_input_config=types.RealtimeInputConfig(
+                    #     automatic_activity_detection=types.AutomaticActivityDetectionConfig(
+                    #         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_LOW,
+                    #         end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_LOW,
+                    #         silence_duration_ms=200, 
+                    #     )
+                    # ),
+                    # DISABLE THINKING MODE
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
                 )
 
                 self.gemini_session_ctx = self.client.aio.live.connect(model=MODEL_ID, config=config)
                 self.gemini_session = await self.gemini_session_ctx.__aenter__()
+                
+                # UI FEEDBACK: Unmute self when connected
+                if self.mumble and self.mumble.users.myself:
+                    try: self.mumble.users.myself.unmute()
+                    except: pass
+
                 self.log(f"Gemini Session Ready (VERSION 2.1). (ID: {id(self.gemini_session)})")
                 
                 with contextlib.suppress(Exception):
@@ -159,7 +184,7 @@ class GeminiLiveIntegration:
                     continue
 
                 try:
-                    # 1. Wait for items with a 0.5s timeout (Heartbeat)
+                    # 1. Wait for items with 0.5s timeout (Heartbeat)
                     item = await asyncio.wait_for(self.to_gemini_queue.get(), timeout=0.5)
                 except asyncio.TimeoutError:
                     # 2. Heartbeat check
@@ -171,7 +196,7 @@ class GeminiLiveIntegration:
                         continue
 
                     # 100ms of silence (16kHz, 16bit mono = 3200 bytes)
-                    item = b'\x00' * 3200 
+                    item = b'\x00' * 3200
                 
                 if isinstance(item, bytes):
                     try:
@@ -208,6 +233,14 @@ class GeminiLiveIntegration:
             async for msg in self.gemini_session.receive():
                 if msg.server_content:
                     self.model_active = True
+                    # VAD: Check for Interruption
+                    if msg.server_content.interrupted:
+                        self.log(">>> Gemini Interrupted by User (Server Confirmed) <<<")
+                        self.model_active = False
+                        self._speaking = False
+                        # We could clear mumble output buffer here if we had access
+                        continue
+
                 if msg.tool_call:
                     self.model_active = True
                 
@@ -274,11 +307,16 @@ class GeminiLiveIntegration:
                     current_turn_input = []
                     current_turn_output = []
 
-                    # Stable Reset Strategy: Wait for settlement, then re-connect with context
-                    await asyncio.sleep(3.0) 
+                    # Session Reset Strategy: Disconnect to force VAD reset for next turn.
+                    # This adds latency (~3s) but guarantees the model will listen to Turn 2.
+                    # Persistent sessions cause "Turn 2 Silence" bug with this model/API version.
+                    self.log("Turn Complete. Resetting session for stability...")
                     await self.disconnect_live_api()
-                    self.model_active = False
-                    return # Exit receiver_loop to trigger fresh connection in connect_live_api
+                    self._speaking = False
+                    return # Exit receiver loop (sender loop will restart when session disconnects)
+                    
+                    # BARE BONES MODE: Persistent Session (Disable Session Reset)
+                    # self._speaking = False
 
         except asyncio.CancelledError: pass
         except Exception as e:
@@ -304,7 +342,13 @@ class GeminiLiveIntegration:
         self.dropout_counts += 1
         self.last_disconnect_time = time.time()
         self.waiting_for_activity = True
-        self.log("Session ended. Waiting for audio activity before reconnecting...")
+        
+        # UI FEEDBACK: Mute self when disconnected
+        if self.mumble and self.mumble.users.myself:
+            try: self.mumble.users.myself.mute()
+            except: pass
+            
+        self.log("Session ended. Muted Mumble. Waiting for audio activity before reconnecting...")
 
     def sound_received(self, user, sound):
         """

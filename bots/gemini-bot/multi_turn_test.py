@@ -21,10 +21,10 @@ class MultiTurnDriver:
     async def connect(self):
         print(f"[System] Connecting {DRIVER_NAME} to {MUMBLE_HOST} using {CERT}...")
         self.mumble = pymumble.Mumble(MUMBLE_HOST, DRIVER_NAME, port=64738, certfile=CERT, keyfile=KEY)
+        self.mumble.set_receive_sound(True)
         self.mumble.start()
         await asyncio.to_thread(self.mumble.is_ready)
         self.mumble.users.myself.unmute()
-        self.mumble.set_receive_sound(True)
         print(f"[System] {DRIVER_NAME} connected.")
 
     async def ensure_test_room(self):

@@ -10,14 +10,13 @@ RUN apt-get update && apt-get install -y \
     python3-zeroc-ice \
     zeroc-ice-slice \
     libvorbis-dev \
+    libopus-dev \
     opus-tools \
     libssl-dev \
     libbz2-dev \
     git \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-
-# Install pymumble, zeroc-ice, and google-genai
-RUN pip3 install pymumble zeroc-ice google-genai
 
 WORKDIR /bots
 
@@ -32,11 +31,25 @@ COPY mumo ./mumo
 COPY mumblerecbot ./mumblerecbot
 COPY gemini-bot ./gemini-bot
 
-# Install ffmpeg for Testing Bot
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
-
 # Make startup script executable
 RUN chmod +x startup.sh
 
+# Install Python dependencies
+# We install pipecat-ai first (which pull in newer protobuf)
+RUN pip3 install --no-cache-dir \
+    "pipecat-ai[google,silero]>=0.0.45" \
+    "python-dotenv" \
+    opuslib
+
+# We install pymumble from git with --no-deps to skip the strict protobuf==3.20.3 requirement.
+# ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python (set below) will allow it to run.
+RUN pip3 install --no-cache-dir --no-deps git+https://github.com/azlux/pymumble.git
+
+# Install remaining requirements
+RUN pip3 install --no-cache-dir -r gemini-bot/requirements.txt
+
+# Fix Protobuf conflict
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+
 # Run the Supervisor Bot
-CMD ["python3", "/bots/supervisor_bot.py"]
+CMD ["python3", "-u", "/bots/supervisor_bot.py"]

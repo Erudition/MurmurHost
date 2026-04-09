@@ -1,3 +1,2 @@
-pymumble
 google-genai
 numpy
