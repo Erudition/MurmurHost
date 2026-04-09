@@ -92,8 +92,10 @@ original_sound_queue_add = SoundQueue.add
 def patched_sound_queue_add(self, audio, sequence, type, target):
     if not hasattr(self, 'raw_packets'):
         self.raw_packets = collections.deque()
+        self._first_packet_logged = False
     if type == 4:  # OPUS
-        if len(self.raw_packets) == 0:
+        if not self._first_packet_logged:
+            self._first_packet_logged = True
             print(f"DEBUG: First raw Opus packet captured (session target={target})")
         self.raw_packets.append({'data': audio, 'time': time.time()})
     return original_sound_queue_add(self, audio, sequence, type, target)
