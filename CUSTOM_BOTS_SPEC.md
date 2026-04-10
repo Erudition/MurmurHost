@@ -194,8 +194,13 @@ AI interaction bot powered by Gemini Live API.
 ## 🔄 Echo Bot (`echobot.py`)
 Minimal audio verification utility.
 
-- **Function**: Bounces all incoming audio back to the speaker with minimal latency.
-    - Sends "Mic Check - I can hear you!" to the user when they have been sucessfully echoed AND present in the Mic Check channel for more than 3 seconds.
+- **Function**: Transitions between two modes based on user verification status:
+    - **Echo Mode (Unverified)**: Bounces all incoming audio back to the speaker with minimal latency.
+    - **Parrot Mode (Verified)**: 
+        - Buffers incoming audio while the human is speaking (VAD active).
+        - Plays back the entire buffer only after the human stops speaking.
+        - **Interruption Logic**: If the human starts speaking again during the bot's playback, the bot must immediately stop its playback, clear its outgoing audio queue, and discard the interrupted buffer.
+    - Sends "Mic Checked - I can hear you! Switching to Parrot Mode." to the user when they have been sucessfully echoed AND present in the Mic Check channel for more than 3 seconds.
         - Only sent once, even if user stays in channel.
 - **Purpose**: Used by users to verify their audio settings and by the Supervisor to confirm human audio activity.
 - **Lifecycle**: Purely managed by the Supervisor; only joins when humans need verification.
