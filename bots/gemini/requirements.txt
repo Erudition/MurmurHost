@@ -1,2 +1,7 @@
+pipecat-ai[google,silero]>=0.0.108
 google-genai
 numpy
+loguru
+python-dotenv
+opuslib
+# pymumble is installed from git in Dockerfile

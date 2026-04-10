@@ -36,6 +36,8 @@ services:
     environment:
       - MUMBLE_HOST=murmur
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PYTHONUNBUFFERED=1
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     volumes:
       - ./bots/gemini:/bots
       - ./bots/gemini/certs:/bots/certs
