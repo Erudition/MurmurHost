@@ -4,7 +4,7 @@ services:
     ports:
       - "64738:64738"
       - "64738:64738/udp"
-    restart: "no"
+    restart: "unless-stopped"
     volumes:
       - ./murmur.sqlite:/data/mumble-server.sqlite
       - ./murmur.ini:/etc/murmur.ini
@@ -23,7 +23,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./bots/supervisor/supervisor_bot.py:/bots/supervisor_bot.py
       - ./bots/supervisor/certs:/bots/certs
-    restart: "no"
+    restart: "unless-stopped"
     depends_on:
       - murmur
     networks:
@@ -32,7 +32,7 @@ services:
   benny-bot:
     build: ./bots/gemini
     container_name: benny-bot
-    profiles: ["bots"]
+    profiles: [ "bots" ]
     environment:
       - MUMBLE_HOST=murmur
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -46,7 +46,7 @@ services:
   echo-bot:
     build: ./bots/echo
     container_name: echo-bot
-    profiles: ["bots"]
+    profiles: [ "bots" ]
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
@@ -60,7 +60,7 @@ services:
   recording-bot:
     build: ./bots/recorder
     container_name: recording-bot
-    profiles: ["bots"]
+    profiles: [ "bots" ]
     environment:
       - MUMBLE_HOST=murmur
     volumes:
@@ -74,7 +74,7 @@ services:
   tester:
     build: ./bots/gemini
     container_name: mumble-tester
-    profiles: ["test"]
+    profiles: [ "test" ]
     environment:
       - MUMBLE_HOST=murmur
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -82,7 +82,7 @@ services:
       - ./bots/tester/main.py:/bots/main.py
       - ./bots/tester/clips:/bots/clips
       - ./bots/tester/certs:/bots/certs
-    entrypoint: ["python3", "/bots/main.py"]
+    entrypoint: [ "python3", "/bots/main.py" ]
     networks:
       - podcast-net
 

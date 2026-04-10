@@ -2,6 +2,7 @@ import time
 import pymumble_py3 as pymumble
 from pymumble_py3.constants import *
 import os
+import sys
 
 HOST = os.getenv("MUMBLE_HOST", "murmur")
 USER = os.getenv("MUMBLE_USER", "Echo") # Allow dynamic naming if needed
@@ -25,11 +26,11 @@ class SimpleEchoBot:
                                        certfile=cert_file, keyfile=key_file)
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CONNECTED, self.connected)
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)
+        self.mumble.set_receive_sound(True)  # CRITICAL: Must be True before .start() to init SoundOutput
         self.mumble.start()
         
     def connected(self):
         print("EchoBot: Connected!")
-        self.mumble.set_receive_sound(True)
         try:
             target = self.mumble.channels.find_by_name(MIC_CHECK_CHANNEL)
             if target:
@@ -42,7 +43,8 @@ class SimpleEchoBot:
             self.mumble.sound_output.add_sound(sound.pcm)
             
             # VERIFICATION Logic
-            name = user.get('name')
+            # Using dict-access since Mumble User objects don't always support .get()
+            name = user['name']
             if name and name not in self.verified:
                 if name not in self.first_sound_times:
                     self.first_sound_times[name] = time.time()
@@ -59,9 +61,11 @@ class SimpleEchoBot:
     def notify_supervisor(self, username):
         supervisor = None
         for u in self.mumble.users.values():
-            if u.get('name') == "Supervisor":
-                supervisor = u
-                break
+            try:
+                if u['name'] == "Supervisor":
+                    supervisor = u
+                    break
+            except: pass
         
         if supervisor:
             supervisor.send_text_message(f"!verify_user {username}")
@@ -72,8 +76,8 @@ class SimpleEchoBot:
         self.connect()
         while self.is_running:
             if not self.mumble.is_alive():
-                print("EchoBot: Mumble thread died. Attempting restart...")
-                self.mumble.start()
+                print("EchoBot: Mumble thread died. Exiting for Supervisor restart.")
+                sys.exit(1)
             time.sleep(1)
 
 if __name__ == "__main__":
