@@ -49,6 +49,7 @@ services:
     profiles: ["bots"]
     environment:
       - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./bots/echo/echobot.py:/bots/echobot.py
       - ./bots/echo/certs:/bots/certs
