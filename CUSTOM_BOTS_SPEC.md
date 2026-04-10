@@ -93,7 +93,7 @@ High-fidelity session recorder that captures individual user streams. Sits in th
 AI interaction bot powered by Gemini Live API.
 
 - **Name**: Always "Benny Botman"
-- **Core Model**: `gemini-2.5-flash-native-audio-preview-12-2025`.
+- **Core Model**: `gemini-3.1-flash-live-preview`.
 - **Voice**: `Fenrir`
 - **API Configuration**:
     - Must use `v1beta`
