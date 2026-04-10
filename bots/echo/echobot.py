@@ -21,7 +21,7 @@ class SimpleEchoBot:
         cert_file = "/bots/certs/echo.pem"
         key_file = "/bots/certs/echo_key.pem"
         
-        self.mumble = pymumble.Mumble(HOST, USER, port=64738, reconnect=True,
+        self.mumble = pymumble.Mumble(HOST, USER, port=64738, reconnect=False,
                                        certfile=cert_file, keyfile=key_file)
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_CONNECTED, self.connected)
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)
