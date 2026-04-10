@@ -1,6 +1,6 @@
 # Custom Mumble Bots Specification
 
-This document outlines the technical specifications and requirements for the custom bots managed in the FTPodcastMurmurHost ecosystem.
+This document outlines the technical specifications and requirements for the custom bots managed in the FTPodcastMurmurHost ecosystem. You must take this document literally when implementing. If there are any contradictions or ambiguities, STOP and ask for clarification.
 
 
 ## Bot Presence
