@@ -149,17 +149,22 @@ class SupervisorBot:
         
         # Robust Hallway finder (startswith to handle unicode)
         for c in self.mumble.channels.values():
-            if c.get('name', '').startswith("Hallway"):
-                hallway_chan = c
-                break
+            try:
+                name = c['name']
+                if name.startswith("Hallway"):
+                    hallway_chan = c
+                    break
+            except: pass
 
         for user in list(self.mumble.users.values()):
-            name = user.get('name')
-            if not name or name in [BOT_NAME, "Echo", "Benny Botman"] or name.startswith("Recording"):
-                continue
-            
-            humans.add(name)
-            chan_id = user.get('channel_id')
+            try:
+                name = user['name']
+                if not name or name in [BOT_NAME, "Echo", "Benny Botman"] or name.startswith("Recording"):
+                    continue
+                
+                humans.add(name)
+                chan_id = user['channel_id']
+            except: continue
             
             if st_chan and chan_id == st_chan['channel_id']:
                 stage_humans.add(name)
@@ -188,14 +193,14 @@ class SupervisorBot:
             # Track Hallway (Recursive Check)
             if hallway_chan:
                 # Check if current channel is Hallway or a descendant
-                curr = self.mumble.channels.get(chan_id)
+                curr = self.mumble.channels[chan_id] if chan_id in self.mumble.channels else None
                 while curr:
                     if curr['channel_id'] == hallway_chan['channel_id']:
                         hallway_humans.add(name)
                         break
-                    # Move up tree - use .get() to safely handle root channel
-                    parent_id = curr.get('parent')
-                    curr = self.mumble.channels.get(parent_id) if parent_id is not None else None
+                    # Move up tree - safely handle root channel
+                    parent_id = curr['parent'] if 'parent' in curr else None
+                    curr = self.mumble.channels[parent_id] if parent_id is not None else None
         
         return humans, stage_humans, mic_check_humans, unverified_humans, audience_humans, backstage_humans, hallway_humans
 
@@ -255,6 +260,11 @@ class SupervisorBot:
         if len(current_humans) == 0:
             data['kick_state_users'] = set()
             return False
+
+        # If Echo, always return based on rules (ignore kick-wait per SPEC Addendum)
+        if bot_name == "Echo":
+            data['kick_wait'] = False
+            return True
 
         # If stage has people, check if we are waiting for NEW people.
         if not data.get('kick_wait', False):
@@ -340,7 +350,9 @@ class SupervisorBot:
             
             try:
                 # 1. Enforce Room
-                if self.mumble.users.myself.get('channel_id') != 0:
+                # Safety: Check if 'myself' object exists and has the property
+                myself = self.mumble.users.myself
+                if myself and myself['channel_id'] != 0:
                     self.mumble.channels[0].move_in()
                 
                 # 2. Check for unexpected bot exits (Kicks)
