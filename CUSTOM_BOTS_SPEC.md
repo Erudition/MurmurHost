@@ -42,7 +42,7 @@ This document outlines the technical specifications and requirements for the cus
         - May be moved by users, or by agent's own tools
         - Shall never join a channel with Echo Bot
     - Leaves server when:
-        - Studio channels are empty for 30 seconds
+        - Studio/Hallway subchannels are empty for 30 seconds
         - OR AI service is unavailable
     - When kicked from server:
         - Stay offline until a positive change in Studio occupancy occurs (i.e., a person joins)
@@ -66,8 +66,7 @@ Central orchestrator for all bot activity and presence management.
 
 - Name: always "Supervisor"
 - Always connected, in the Root channel, deafened, and muted.
-- Manages other bots as subprocesses.
-- Implements a 20-second cooldown between start attempts of the same bot to prevent "Username already in use" errors.
+- Manages other bots as docker containers.
 - Periodically updates its own **User Comment** with a detailed report of all bots' status and verification counts.
 
 ---
