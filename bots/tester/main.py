@@ -136,7 +136,7 @@ class MultiTurnDriver:
             start_wait = time.time()
             responded = False
             
-            while time.time() - start_wait < 5:
+            while time.time() - start_wait < 30:
                 sid = self.benny_user['session']
                 u = self.mumble.users.get(sid)
                 
