@@ -39,14 +39,21 @@
 - **Restart Policies**: Use `restart: unless-stopped` for the **Supervisor** only. Bots managed by the Supervisor (like Echo) must use `restart: "no"` to prevent conflicting restart loops and "zombie" processes.
 - **Mandatory Rebuilds**: These bot containers do NOT use host volume mounts for source code. Any changes to `.py` files **REQUIRE** a `docker compose build <service>` followed by `docker compose up -d` to take effect.
 
-## Total Interactive Convergence — Definitive Success (2026-04-12)
+## Total Interactive Convergence — Definitive Success (2026-04-17)
 
-The interactive lock was achieved by aligning the protocol, signal, and delivery layers into a "Perfect Connection" state.
+The interactive lock was achieved by aligning the protocol, signal, and delivery layers into a "Perfect Connection" state using the Native Google GenAI SDK (v1beta).
 
-### Final Breakthrough Stack
-- **Protocol (Uplink)**: Standardized on `v1beta` using a **Single-Call Unified Uplink**. The SDK call must use the explicit `audio=` keyword: `send_realtime_input(audio=...)`.
-- **Explicit Turn-Switch**: Server-side VAD in `v1beta` is unreliable for low-latency turns. The bot sends `audio_stream_end=True` after a 500ms silence flush to force the model from "Listening" to "Generating" state.
-- **Signal Purity**: **Unity Gain (1.0x)** is mandatory. Excessive gain (clipping) disrupts the model's acoustic sensitivity. Resampling must use `audioop.ratecv` with persistent state to eliminate boundary noise.
-- **Guaranteed Output Delivery**: Output frames must bypass the `mumble.is_ready()` check. Transmissions rely directly on the existence of the `sound_output` manager to ensure immediate playback.
-- **Behavioral Mandate**: The `system_instruction` must include a hardcoded mandate for "verbal and immediate" responses to break potential silent "Listening" loops.
-- **Bootstrap**: A text-based priming turn (`"Initial greeting"`) is required at session start to initialize the multimodal context.
+### Final Breakthrough Stack (v14)
+- **Protocol (Multi-Session)**: **MANDATORY SESSION RESET**. Due to a 'Turn 2 Silence' bug in persistent v1beta sessions, the bot MUST disconnect and re-establish the Gemini session immediately upon receiving `turn_complete=True`. This provides a fresh protocol context for every turn.
+- **SDK Signatures (Targeted)**:
+  - **Audio Fragments**: Use `session.send_realtime_input(audio=types.Blob(...))`. Do NOT use `media_chunks`.
+  - **Tool Responses**: Use `session.send_tool_response(function_responses=[...])`. The generic `send()` with `tool_response` keyword will crash the session in modern SDK versions.
+  - **Turn Switch**: Use `session.send_realtime_input(audio_stream_end=True)` to signal model processing.
+- **Signal Integrity**: **Unity Gain (1.0x)** mandatory in `MumbleTransport` to prevent VAD clipping.
+- **Phonetic Heartbeat**: Proactively send a 200ms silence block (`b'\x00' * 3200`) after `send_tool_response` to maintain turn sensitivity.
+- **Lifecycle Alignment**: `presence_manager` must gate the audio uplink until the bot is undeafened and moved into the target channel.
+
+### Stability Constants
+- **VAD Watchdog**: 1.0s silence threshold is the optimal balance between turn-switching and phonetic tail preservation for tool-use.
+- **Model**: `gemini-3.1-flash-live-preview` (multimodal native audio).
+- **Environment**: `PYTHONUNBUFFERED=1` and `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`.
