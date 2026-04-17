@@ -1,149 +1,29 @@
-# Custom Mumble Bots Specification
+# Erudition Murmur Custom Bots Specification
 
-This document outlines the technical specifications and requirements for the custom bots managed in the FTPodcastMurmurHost ecosystem.
-
-
-## Bot Presence
-- All presence (and mute status) logic should be Event-driven
-    - Do NOT create constant polling loops to check status unless events are confirmed to be unavailable
-- Running status of a bot's container should be coupled to presence in server
-- **Supervisor Presence**:
-    - Room: Root
-        - When moved, return to Root immediately
-    - Joins when server starts
-    - Never leaves
-    - When kicked from server:
-        - Restarts own container (which triggers restart of other bots)
-- **Echo Bot Presence**:
-    - Joins when:
-        - mic-unverified humans are present anywhere on the server 
-        - OR someone is in "Mic Check"
-    - Channel: Mic Check only
-    - Leaves when:
-        - the Mic Check channel is empty
-        - AND there are no mic-unverified humans on the server
-    - When kicked from server:
-        - Rejoin based on same rules
-- **Recording Bot Presence**:
-    - Joins server when:
-        - Stage is occupied by any human
-    - Channel: Audience only
-    - Leaves server when:
-        - Stage is empty for 30 seconds
-    - When kicked from server:
-        - Stay offline until a positive change in Stage occupancy occurs (i.e., a person joins)
-    - Container:
-        - Must exit and shut down gracefully - e.g. recordings in progress save properly
-- **Live AI Bot Presence**:
-    - Joins server when:
-        - Studio channels OR Hallway channels are occupied by any human
-        - AND AI Service is available
-    - Initial Channel:
-        - `AI Test Room`, if it exists (temp channel and simulated humans can be created for testing)
-        - otherwise `Audience`
-        - May be moved by users, or by agent's own tools
-        - Shall never join a channel with Echo Bot
-    - Leaves server when:
-        - Studio channels are empty for 30 seconds
-        - OR AI service is unavailable
-    - When kicked from server:
-        - Stay offline until a positive change in Studio occupancy occurs (i.e., a person joins)
-- **Testing Bot Presence**:
-    - Channel: Decided by testing Agent
-    - Multiple Testing bots may be spawned as needed - use different names
-    - Always offline/disabled by default
-    - Runs when triggered manually by Agent for testing of other bots
-    - Agent should shut down Testing bot after testing is complete
-
-
-## Mic Verification System:
-A human is mic-verified when:
-    - they have been present in the Mic Check channel for 3 seconds
-    - AND they were detected to be speaking at least once in that channel
-Verification status persists for 60 seconds after a user leaves the server.
-
+This document defines the requirements, constraints, and architecture for the custom bots managed within this repository.
 
 ## 🛡️ Supervisor Bot (`supervisor_bot.py`)
 Central orchestrator for all bot activity and presence management.
 
 - Name: always "Supervisor"
 - Always connected, in the Root channel, deafened, and muted.
-- Manages other bots as subprocesses.
+- Manages other bots as docker containers.
 - Periodically updates its own **User Comment** with a detailed report of all bots' status and verification counts.
+- **Protobuf Conflict**: Due to `pymumble` requiring Protobuf 3.x and Pipecat requiring 4.x/5.x, set `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` in the environment.
+- **Pymumble Installation**: Install `pymumble` from git (`https://github.com/azlux/pymumble.git`) using `--no-deps` to bypass metadata-level version conflicts.
+- **Dependencies**: Manually ensure `opuslib` and `libopus-dev` are installed as they are required by `pymumble` but may be skipped during `--no-deps` install.
+- **Service Type**: Use `GeminiLiveLLMService` for native multimodal support.
 
----
+## 🤖 Gemini Live Bot (`pipecat_bot.py`)
+Advanced multimodal conversational AI powered by Google's Gemini Live API.
 
-## 🎥 Recording Bot (`opus_recorder.py`)
-High-fidelity session recorder that captures individual user streams. Sits in the Audience channel (which can hear the Stage) when humans are in the Stage channel.
-
-- **Bot Naming Scheme**: `Recording (Session YYYY-MM-DD)`.
-    - Sessions starting before 07:00 AM are attributed to the previous calendar day.
-- **Technical Features**:
-    - Bit-perfect Opus muxing that records the raw audio from each user in the exact bitrate it was received without re-encoding.
-    - Generates **WebVTT** files for speaker-labeled transcripts.
-    - Silence packet injection:
-        - Synchronizes audio across users using session start-time offsets
-        - Prevents audio from having silences skipped when opened in e.g. Audacity
-- **File Organization**:
-    - Target Folder: `recordings/Session YYYY-MM-DD`
-- **Lifecycle**: Started/Stopped by the Supervisor based on presence rules. Leaves server if crash occurs.
-
----
-
-## 🤖 Gemini Live AI Bot (`gemini-bot/bot.py`)
-AI interaction bot powered by Gemini Live API.
-
-- **Name**: Always "Benny Botman"
-- **Core Model**: `gemini-2.5-flash-native-audio-preview-12-2025`.
-- **Voice**: `Fenrir`
-- **API Configuration**:
-    - Must use `v1beta`
-    - Audio must be downsampled to 16k
-    - Audio Transcripts:
-        - `output_audio_transcription`: Enabled.
-        - `input_audio_transcription`: Enabled.
-        - Agent should refer to logs when testing to confirm conversation responses.
-- **Agent Tools**:
-    - Change channel tool:
-        - Always available
-        - Enumerates valid channel moves based on client permissions
-        - Leaving a channel only occurs before or after agent finishes speaking, never during
-            - Thus synchronous - default blocking behavior
-    - Channel Message tool:
-        - Always available
-        - Enumerates valid channels to message based on client permissions
-        - Called asynchronously (i.e. can use tool during human's turn)
-            - Use `"behavior": "NON_BLOCKING"`
-    - Direct Message tool:
-        - Always available
-        - Enumerates valid users to message based on client permissions
-        - Called asynchronously (i.e. can use tool during human's turn)
-            - Use `"behavior": "NON_BLOCKING"`
-    - Grounding with Google Search
-    - Note: Non-tool text output is sent as a message to the Studio channel (seen in all child channels).
-- **Bot Behavior**:
-    - Self-Mute Status:
-        - Bot is ALWAYS muted when the Live API is not connected.
-        - Bot is ALWAYS unmuted when the Live API is connected and streaming what it hears.
-        - Bot's self-mute status should be a reliable indicator of API connection, even dropouts that are smoothed over.
-    - Live API must be in `AUDIO` mode all the time 
-        - (`TEXT` mode has a known bug with this model where it tries to process audio regardless)
-    - Streaming Connection is ALLOWED only:
-        - Whenever in a channel with permission to speak
-            - NOT force-muted or force-deafened (suppressed) channels
-    - Streaming Connection should start: 
-        - when speaking is allowed 
-        - AND any human that can be heard from this channel has started transmitting
-            - Stay disconnected until first human speech starts, mute status reflects this
-            - Audio should be buffered from the start even if API does not connect immediately
-    - While streaming:
-        - Live API's built-in VAD should still be used - just because a mumble client is transmitting, does not mean it's valid speech - let API-side VAD handle this
-    - Streaming should be ended by bot when:
-        - Bot is muted by another user: Session ends, bot moves to Audience (if on Stage)
-        - Agent chooses not to respond (empty reply - `proactive audio` feature).
-        - No one has spoken for 60 seconds
-    - When streaming ends while on stage:
-        - Bot should move to Audience channel
+- **Objective**: Provide high-fidelity, bidirectional conversational AI on the Mumble server.
+- **Framework**: Built on `pipecat-ai` with `google-genai` integration.
+- **Uplink Standard**: Uses the `v1beta` Live API for low-latency interactive reachability.
+- **Audio Sensitivity**: Implements Unity Gain (1.0x) and phase-locked resampling (16kHz in / 48kHz out) to ensure the model's acoustic encoder receives a pristine signal.
+- **State Mastery**: Uses an explicit `audio_stream_end=True` turn-switch signal during a 500ms silence flush to force the model from "Listening" to "Generating" state.
+- **Delivery Path**: Bypasses transient Mumble sync-state checks (`is_ready()`) for guaranteed real-time playback.
+- **Interaction Model**: Standardized on a "Reactive + Primed" initialization flow with a hardcoded Interactive Mandate in the system instruction.
 - **Failure Handling**:
     - Session duration exceeded:
         - details at https://ai.google.dev/gemini-api/docs/live-session
@@ -196,8 +76,13 @@ AI interaction bot powered by Gemini Live API.
 ## 🔄 Echo Bot (`echobot.py`)
 Minimal audio verification utility.
 
-- **Function**: Bounces all incoming audio back to the speaker with minimal latency.
-    - Sends "Mic Check - I can hear you!" to the user when they have been sucessfully echoed AND present in the Mic Check channel for more than 3 seconds.
+- **Function**: Transitions between two modes based on user verification status:
+    - **Echo Mode (Unverified)**: Bounces all incoming audio back to the speaker with minimal latency.
+    - **Parrot Mode (Verified)**: 
+        - Buffers incoming audio while the human is speaking (VAD active).
+        - Plays back the entire buffer only after the human stops speaking.
+        - **Interruption Logic**: If the human starts speaking again during the bot's playback, the bot must immediately stop its playback, clear its outgoing audio queue, and discard the interrupted buffer.
+    - Sends "Mic Checked - I can hear you! Switching to Parrot Mode." to the user when they have been sucessfully echoed AND present in the Mic Check channel for more than 3 seconds.
         - Only sent once, even if user stays in channel.
 - **Purpose**: Used by users to verify their audio settings and by the Supervisor to confirm human audio activity.
 - **Lifecycle**: Purely managed by the Supervisor; only joins when humans need verification.
@@ -239,6 +124,7 @@ Unless explicitly specified, bot logic should rely on user permissions in a chan
     - Hallway: Hallway 🖉
         - Parent only - Cannot be directly occupied
         - Used to contain temporary channels - any user can create temporary channels
+
 # Test Procedures
 
 These procedures define the standard verification suite for Benny Bot stability and feature compliance.

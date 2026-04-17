@@ -62,35 +62,38 @@ class MultiTurnDriver:
     async def wait_for_benny(self, target_channel_id):
         print(f"[System] Waiting for {BOT_UNDER_TEST} to join {TEST_ROOM}...")
         for i in range(45):
-            # Always look up fresh user state
-            benny = next((u for u in self.mumble.users.values() if u['name'] == BOT_UNDER_TEST), None)
-            if benny:
-                b_chan = benny['channel_id']
-                if b_chan == target_channel_id:
-                    self.benny_user = benny
-                    print(f"[System] {BOT_UNDER_TEST} has arrived in channel {b_chan}. Waiting for bot to UNMUTE...")
+            # 1. Find the LATEST bot session (highest ID) to avoid zombies
+            candidates = [u for u in self.mumble.users.values() if u['name'] == BOT_UNDER_TEST]
+            if candidates:
+                benny = max(candidates, key=lambda x: x['session'])
+                
+                # 2. Check channel
+                if benny['channel_id'] == target_channel_id:
+                    print(f"[System] {BOT_UNDER_TEST} (Session {benny['session']}) is in channel {benny['channel_id']}. Waiting for UNMUTE...")
                     
-                    # Wait for unmute (max 25s)
+                    # 3. Wait for unmute (max 25s)
                     for wait_tick in range(50):
-                        # Re-fetch state for this session
                         u_state = self.mumble.users.get(benny['session'])
-                        is_muted = u_state.get('self_mute', True) if u_state else True
-                        
-                        if not is_muted:
-                            print(f"[System] {BOT_UNDER_TEST} is UNMUTED and listening after {wait_tick * 0.5}s.")
-                            return True
+                        if u_state:
+                            # If self_mute is missing, it means the user is in default (unmuted) state
+                            is_muted = u_state.get('self_mute', False)
+                            
+                            if not is_muted:
+                                print(f"[System] {BOT_UNDER_TEST} (Session {benny['session']}) is listening.")
+                                self.benny_user = u_state
+                                return True
                         
                         if wait_tick % 10 == 0:
-                            print(f"  [Wait] Still muted... (Tick {wait_tick})")
+                            print(f"  [Wait] Syncing state... Session: {benny['session']} (Tick {wait_tick})")
                         await asyncio.sleep(0.5)
                     
                     print(f"[FAIL] {BOT_UNDER_TEST} joined but timed out waiting for UNMUTE.")
-                    return False
+                    return "UNMUTE_TIMEOUT"
             
             if i % 10 == 0:
-                print(f"[System] Still waiting for {BOT_UNDER_TEST} to join... (Users: {[u['name'] for u in self.mumble.users.values()]})")
+                print(f"[System] Still waiting for {BOT_UNDER_TEST}... (Users: {[u['name'] for u in self.mumble.users.values()]})")
             await asyncio.sleep(1)
-        return False
+        return "JOIN_TIMEOUT"
 
     def play_clip(self, filename):
         path = f"/bots/clips/{filename}"
@@ -111,8 +114,12 @@ class MultiTurnDriver:
         tid = await self.ensure_test_room()
         if tid is None: return False
         
-        if not await self.wait_for_benny(tid):
-            print(f"[FAIL] {BOT_UNDER_TEST} did not join {TEST_ROOM}.")
+        status = await self.wait_for_benny(tid)
+        if status == "JOIN_TIMEOUT":
+            print(f"[FAIL] {BOT_UNDER_TEST} timed out waiting to join {TEST_ROOM}.")
+            return False
+        if status == "UNMUTE_TIMEOUT":
+            print(f"[FAIL] {BOT_UNDER_TEST} joined {TEST_ROOM} but remained MUTED.")
             return False
 
         clips = [
@@ -129,7 +136,7 @@ class MultiTurnDriver:
             start_wait = time.time()
             responded = False
             
-            while time.time() - start_wait < 60:
+            while time.time() - start_wait < 30:
                 sid = self.benny_user['session']
                 u = self.mumble.users.get(sid)
                 
