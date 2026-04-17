@@ -20,6 +20,7 @@ class MumbleInputTransport(BaseInputTransport):
         self._audio_queue = asyncio.Queue()
         self._producer_task = None
         self._myself_session = None
+        self._resample_state = None # Persistent state for ratecv
 
     def set_mumble(self, mumble, loop):
         self._mumble = mumble
@@ -82,7 +83,10 @@ class MumbleInputTransport(BaseInputTransport):
             raw_audio = sound.pcm
             
             # 3. Resample to 16kHz (width=2, channels=1)
-            audio_16k, _ = audioop.ratecv(raw_audio, 2, 1, 48000, 16000, None)
+            # CRITICAL: Maintain state to avoid boundary clicks that disrupt VAD
+            audio_16k, self._resample_state = audioop.ratecv(
+                raw_audio, 2, 1, 48000, 16000, self._resample_state
+            )
             
             # 3b. Use NATURAL gain (1.0x) to avoid clipping.
             audio_final = audio_16k # No boost
@@ -112,23 +116,38 @@ class MumbleOutputTransport(BaseOutputTransport):
         self._mumble = mumble
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
+        # TOTAL INTAKE DEBUG
+        logger.debug(f"MumbleOutput: INTAKE frame {type(frame).__name__} from {direction}")
         await super().process_frame(frame, direction)
         
         # Handle audio output frames
         if isinstance(frame, OutputAudioRawFrame):
             await self.write_output_audio_frame(frame)
 
+    _output_count = 0
+
     async def write_output_audio_frame(self, frame: OutputAudioRawFrame):
         try:
-            # Resample from Gemini (usually 24k) to 48k for Mumble
-            audio_48k, _ = audioop.ratecv(frame.audio, 2, 1, frame.sample_rate, 48000, None)
+            MumbleOutputTransport._output_count += 1
+            if MumbleOutputTransport._output_count <= 10 or MumbleOutputTransport._output_count % 50 == 0:
+                logger.debug(f"MumbleOutput: Writing frame #{MumbleOutputTransport._output_count} (source rate: {frame.sample_rate})")
+            
+            # 1. Apply safety gain boost (2.0x) for clarity
+            boosted_audio = audioop.mul(frame.audio, 2, 2.0)
+
+            # 2. Resample from Gemini (usually 24k) to 48k for Mumble
+            audio_48k, _ = audioop.ratecv(boosted_audio, 2, 1, frame.sample_rate, 48000, None)
+            
             await self.write_raw_audio_frames(audio_48k)
         except Exception as e:
-            logger.error(f"MumbleOutput error resampling: {e}")
+            logger.error(f"MumbleOutput ERROR in write_output_audio_frame: {e}")
 
     async def write_raw_audio_frames(self, frames: bytes):
-        if self._mumble and self._mumble.is_ready():
+        # SDK Bypass: Guaranteed delivery path. Rely on sound_output existence instead of is_ready()
+        if self._mumble and hasattr(self._mumble, "sound_output") and self._mumble.sound_output:
             self._mumble.sound_output.add_sound(frames)
+        else:
+            logger.warning(f"MumbleOutput: DROPPED {len(frames)} bytes because SoundOutput is not available")
 
 
 class MumbleTransport:

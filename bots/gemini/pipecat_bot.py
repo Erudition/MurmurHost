@@ -3,7 +3,11 @@ import os
 import sys
 import argparse
 import signal
+import time
+import traceback
+import audioop
 from loguru import logger
+
 from dotenv import load_dotenv
 
 import pymumble_py3 as pymumble
@@ -14,16 +18,11 @@ from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.logger import FrameLogger
 from pipecat.transports.base_transport import TransportParams
-from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService, GeminiVADParams
-from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.frames.frames import LLMRunFrame, EndFrame, TextFrame, LLMContextFrame, StartFrame, InputAudioRawFrame, ErrorFrame
+from pipecat.frames.frames import LLMRunFrame, EndFrame, TextFrame, LLMContextFrame, StartFrame, InputAudioRawFrame, AudioRawFrame, OutputAudioRawFrame, ErrorFrame
 from pipecat.processors.frame_processor import FrameProcessor
-import time
-import traceback
 
+from google import genai
 from google.genai import types
-
-
 
 from mumble_transport import MumbleTransport
 
@@ -43,7 +42,6 @@ class PymumbleWrapper:
             keyfile="/bots/certs/benny_key.pem",
             reconnect=False
         )
-        # Enable sound reception explicitly
         self.mumble.set_receive_sound(True)
         
     def start(self):
@@ -61,56 +59,238 @@ async def monitor_users(mumble_wrapper):
             pass
         await asyncio.sleep(15)
 
-class StartFrameDetector(FrameProcessor):
-    def __init__(self, callback):
+class GeminiSDKProcessor(FrameProcessor):
+    def __init__(self, api_key, system_instruction, output_sink=None):
         super().__init__()
-        self._callback = callback
+        self._api_key = api_key
+        self._system_instruction = system_instruction
+        self._output_sink = output_sink
+        self._client = genai.Client(
+            http_options={"api_version": "v1beta"},
+            api_key=self._api_key,
+        )
+        self._session = None
+        self._send_queue = asyncio.Queue()
+        self._handler_task = None
+        self._running = False
+        self._ready_event = None
+        self._audio_buffer = bytearray()
+        self._last_frame_time = 0
+        self._flush_task = None
+
+    async def _flush_loop(self):
+        """Periodically flushes the audio buffer if it has been idle."""
+        while self._running:
+            await asyncio.sleep(0.05)
+            # If we have stranded audio and haven't seen a frame in 500ms, FLUSH IT
+            if self._audio_buffer and (time.time() - self._last_frame_time) > 0.500:
+                logger.debug(f"SDK Bypass: FLUSHING partial buffer (size: {len(self._audio_buffer)}) and ending stream.")
+                audio_raw = bytes(self._audio_buffer)
+                self._send_queue.put_nowait({"audio": {"data": audio_raw, "mime_type": "audio/pcm"}})
+                self._send_queue.put_nowait({"audio_stream_end": True})
+                # CRITICAL: Clear buffer after flush
+                self._audio_buffer = bytearray()
+
+
+    async def _sdk_loop(self):
+        try:
+            config = types.LiveConnectConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Charon")
+                    )
+                ),
+                system_instruction=types.Content(
+                    parts=[types.Part.from_text(text=self._system_instruction)],
+                    role="system"
+                ),
+                realtime_input_config=types.RealtimeInputConfig(
+                    automatic_activity_detection=types.AutomaticActivityDetection(
+                        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+                        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH
+                    )
+                )
+            )
+
+            model_id = "models/gemini-3.1-flash-live-preview"
+            logger.info(f"SDK Bypass: Attempting connection to {model_id} (v1beta)...")
+            
+            async with self._client.aio.live.connect(model=model_id, config=config) as session:
+                self._session = session
+                self._running = True
+                logger.info(f"SDK Bypass: SUCCESS - Connected to {model_id}")
+
+                if self._ready_event:
+                    self._ready_event.set()
+
+                # Start the flush loop
+                self._flush_task = asyncio.create_task(self._flush_loop())
+
+                # Protocol Aligned: Send an explicit priming turn to warm up the multimodal session
+                logger.info("SDK Bypass: Sending explicit priming turn...")
+                await self._session.send_realtime_input(
+                    text="Hello Gemini, I am Benny Botman. I am about to send you audio. Please acknowledge that you can hear me by saying 'I hear you' as soon as I finish speaking."
+                )
+                logger.info("SDK Bypass: Waiting for user audio (Reactive Mode)...")
+
+                receive_task = asyncio.create_task(self._receive_audio())
+                send_task = asyncio.create_task(self._send_realtime())
+                
+                await asyncio.wait(
+                    [receive_task, send_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                
+                for task in [receive_task, send_task]:
+                    task.cancel()
+
+        except Exception as e:
+            logger.error(f"SDK Bypass FATAL: Connection failed: {e}")
+            traceback.print_exc()
+        finally:
+            self._running = False
+            self._session = None
+            logger.info("SDK Bypass: SDK Loop terminating.")
+
+    async def _send_realtime(self):
+        send_count = 0
+        while self._running:
+            msg = await self._send_queue.get()
+            if self._session:
+                try:
+                    # Native Multimodal Aligned: Use send_realtime_input with audio
+                    if "audio" in msg:
+                        await self._session.send_realtime_input(audio=msg["audio"])
+                    elif "audio_stream_end" in msg:
+                        await self._session.send_realtime_input(audio_stream_end=msg["audio_stream_end"])
+                    elif "text" in msg:
+                        await self._session.send_realtime_input(text=msg["text"])
+                    else:
+                        await self._session.send_realtime_input(**msg)
+                        
+                    send_count += 1
+                    # Telemetry: Log every chunk during stabilization
+                    logger.debug(f"SDK Bypass: Sent audio chunk #{send_count} (buffer size: {len(msg.get('audio', {}).get('data', b''))})")
+                except Exception as e:
+                    logger.warning(f"SDK Bypass: Error sending: {e}")
+
+    async def _receive_audio(self):
+        receive_count = 0
+        while self._running:
+            if self._session:
+                try:
+                    async for response in self._session.receive():
+                        logger.debug(f"SDK Bypass: RAW MSG: {response}")
+                        # 1. Surgical extraction from server_content to avoid .text warnings
+                        if response.server_content:
+                            sc = response.server_content
+                            if sc.model_turn:
+                                for part in sc.model_turn.parts:
+                                    if hasattr(part, "inline_data") and part.inline_data:
+                                        data = part.inline_data.data
+                                        if data:
+                                            receive_count += 1
+                                            # Log every frame during stabilization
+                                            logger.debug(f"SDK Bypass: RECEIVED audio frame #{receive_count} (size: {len(data)})")
+                                            
+                                            # BYPASS: Push directly to output sink to avoid pipeline routing issues
+                                            if hasattr(self, "_output_sink") and self._output_sink:
+                                                await self._output_sink.write_output_audio_frame(
+                                                    OutputAudioRawFrame(audio=data, sample_rate=24000, num_channels=1)
+                                                )
+                                            else:
+                                                # Fallback to pipeline
+                                                await self.push_frame(OutputAudioRawFrame(audio=data, sample_rate=24000, num_channels=1))
+                                    
+                                    if part.text:
+                                        logger.info(f"Gemini Text: {part.text}")
+                            
+                            # 1b. Handle turn completion signals
+                            if sc.turn_complete:
+                                logger.debug("SDK Bypass: Turn Complete received.")
+                            if sc.interrupted:
+                                logger.info("SDK Bypass: Model Interrupted.")
+
+                except Exception as e:
+                    logger.warning(f"SDK Bypass: Receive error: {e}")
+                    # traceback.print_exc()
+                    break
 
     async def process_frame(self, frame, direction):
-        await super().process_frame(frame, direction)
         if isinstance(frame, StartFrame):
-            logger.info("Pipeline StartFrame detected!")
-            await self._callback()
+            if not self._handler_task:
+                logger.debug("GeminiSDKProcessor: Received StartFrame, spawning SDK Loop.")
+                self._handler_task = asyncio.create_task(self._sdk_loop())
+            return await super().process_frame(frame, direction)
+        
+        if isinstance(frame, InputAudioRawFrame) and self._running:
+            try:
+                self._last_frame_time = time.time()
+                
+                # Signal Purity: Use Unity Gain (1.0x) to eliminate clipping
+                boosted_chunk = audioop.mul(frame.audio, 2, 1.0)
+                # Unified Accumulator: Buffer until we have 100ms (3200 bytes)
+                self._audio_buffer.extend(boosted_chunk)
+                
+                if len(self._audio_buffer) >= 3200:
+                    chunk_to_send = bytes(self._audio_buffer[:3200])
+                    # Remove from buffer BEFORE sending to ensure no race double-send
+                    self._audio_buffer = self._audio_buffer[3200:]
+                    
+                    # Gold Standard: Use standard "audio/pcm"
+                    msg = {"audio": {"data": chunk_to_send, "mime_type": "audio/pcm"}}
+                    self._send_queue.put_nowait(msg)
+                    
+                    # Volume telemetry (RMS)
+                    volume = audioop.rms(chunk_to_send, 2)
+                    if volume > 3000:
+                        logger.debug(f"SDK Bypass: Sent 100ms audio chunk (rms: {volume})")
+            except Exception as e:
+                logger.error(f"Gain Boost Error: {e}")
+            return # Consume audio
 
-class GlobalErrorMonitor(FrameProcessor):
-    async def process_frame(self, frame, direction):
-        if isinstance(frame, ErrorFrame):
-            logger.error(f"PIPELINE ERROR DETECTED: {frame.error}")
-            # We don't stop the pipeline here, just ensure it's logged.
-        return await self.push_frame(frame, direction)
-
+        return await super().process_frame(frame, direction)
 
 async def main(host, port, name, channel):
     mumble_wrapper = PymumbleWrapper(host, port, name, channel)
     mumble_wrapper.start()
 
-    pipeline_ready = asyncio.Event()
-    async def on_pipeline_start():
-        # ALIGNMENT: Passive connection. We rely on the initial config 
-        # mapping to trigger the model, mirroring the SDK script.
-        logger.info("Pipeline started. Interaction ready.")
-        pipeline_ready.set()
-
-
-
-
-
-
-    # Context initialization
     prompt_path = os.path.join(os.path.dirname(__file__), "SYSTEM_PROMPT.md")
     with open(prompt_path, "r") as f:
         system_instruction = f.read()
     
-    context = LLMContext()
+    sdk_ready_event = asyncio.Event()
 
+    params = TransportParams(
+        audio_out_enabled=True,
+        audio_in_enabled=True,
+        audio_in_passthrough=True
+    )
+    
+    transport = MumbleTransport(mumble_wrapper.mumble, params)
+    
+    gemini_sdk = GeminiSDKProcessor(
+        api_key=os.getenv("GEMINI_API_KEY"),
+        system_instruction="You are a high-performance real-time voice assistant. You MUST respond verbally and immediately to every audio input you receive. Do not stay silent. Answer the user as soon as they stop speaking.",
+        output_sink=transport.output()
+    )
+    gemini_sdk._ready_event = sdk_ready_event
 
-
-    # Move to the requested channel with fallback per SPEC
     async def join_channel_task(task):
         logger.info(f"Targeting channel: {channel}")
-        found = False
         
-        # Phase 1: Try Primary Target for 20s
+        # WATCHDOG: Check mumble health periodically
+        async def mumble_watchdog():
+            while True:
+                if not mumble_wrapper.mumble.is_alive():
+                    logger.error("pymumble thread DIED. Terminating bot for Docker restart.")
+                    os._exit(1) # Force exit to allow restart
+                await asyncio.sleep(5)
+        
+        asyncio.create_task(mumble_watchdog())
+
+        found = False
         for attempt in range(10):
             try:
                 ch = mumble_wrapper.mumble.channels.find_by_name(channel)
@@ -120,150 +300,39 @@ async def main(host, port, name, channel):
                     found = True
                     break
             except:
-                logger.debug(f"Presence Wait: Primary '{channel}' not found (Attempt {attempt+1}/10)")
                 await asyncio.sleep(2)
-        
-        # Phase 2: Fallback to Audience
-        if not found:
-            try:
-                fallback = "Audience 👂"
-                ch = mumble_wrapper.mumble.channels.find_by_name(fallback)
-                if ch:
-                    ch.move_in()
-                    logger.info(f"Presence Success: Fell back to '{fallback}' (ID: {ch['channel_id']})")
-                    found = True
-            except Exception as e:
-                logger.error(f"Presence Failure: Could not join primary or fallback: {e}")
         
         if not found:
             logger.error("Could not find any suitable channel. Bot will stay in Root.")
         
-        # Wait for pipeline to be ready and Mumble sync
-        logger.info("Waiting for pipeline and Gemini session to start...")
-        try:
-            # 2. Wait for bootstrap to complete and services to stabilize
-            await asyncio.wait_for(pipeline_ready.wait(), timeout=15)
-            
-            # Wait for Mumble synchronization
-            while not mumble_wrapper.mumble.users.myself:
-                await asyncio.sleep(0.5)
-            
-            # Small delay to ensure the Gemini websocket is ready after bootstrap
-            await asyncio.sleep(1.0)
-            
-            # Unmute immediately - session is now Running
-            myself = mumble_wrapper.mumble.users.myself
-            myself.unmute()
-            myself.undeafen()
-            myself['self_mute'] = False
-            myself['self_deaf'] = False
-            
-            logger.info("Benny is now UNMUTED and LISTENING.")
+        while not mumble_wrapper.mumble.users.myself:
+            await asyncio.sleep(0.5)
+        
+        mumble_wrapper.mumble.users.myself.mute()
+        logger.info("Benny is waiting for SDK connection...")
+        
+        await sdk_ready_event.wait()
+        await asyncio.sleep(1.0)
+        
+        myself = mumble_wrapper.mumble.users.myself
+        myself.unmute()
+        myself.undeafen()
+        myself['self_mute'] = False
+        myself['self_deaf'] = False
+        logger.info("Benny is now UNMUTED and LISTENING (SDK Bypass Mode).")
 
-
-        except asyncio.TimeoutError:
-            logger.error("Pipeline OR Mumble sync timed out.")
-        except Exception as e:
-            logger.error(f"Error during unmuting/initialization: {e}", exc_info=True)
-
-
-
-
-
-
-    # Set up signal handlers for clean exit
-    def signal_handler():
-        logger.info("Received termination signal. Shutting down...")
-        if mumble_wrapper.mumble:
-            mumble_wrapper.mumble.stop()
-        sys.exit(0)
-
-    try:
-        loop = asyncio.get_running_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, signal_handler)
-    except NotImplementedError:
-        pass # Signal handlers not supported on all platforms/loops
-
-    # Restore correct model identifier and production parameters
-    # ALIGNMENT: Match the working SDK script exactly
-    llm = GeminiLiveLLMService(
-        api_key=os.getenv("GEMINI_API_KEY"),
-        inference_on_context_initialization=False, # ALIGNMENT: Disable redundant initial turn
-        settings=GeminiLiveLLMService.Settings(
-            model="models/gemini-3.1-flash-live-preview",
-            system_instruction=types.Content(
-                parts=[types.Part.from_text(text=system_instruction)],
-                role="user" # ALIGNMENT: The secret role trigger
-            ),
-            voice="Charon",
-            media_resolution="MEDIA_RESOLUTION_MEDIUM"
-        )
-    )
-
-
-
-
-
-
-
-
-
-
-    # Initialize custom Mumble Transport
-    params = TransportParams(
-        audio_out_enabled=True,
-        audio_in_enabled=True,
-        audio_in_passthrough=True
-    )
-    transport = MumbleTransport(mumble_wrapper.mumble, params)
-
-    class FrameCounter(FrameProcessor):
-        def __init__(self, name):
-            super().__init__()
-            self._name = name
-            self._count = 0
-        async def process_frame(self, frame, direction):
-            await super().process_frame(frame, direction)
-            if isinstance(frame, InputAudioRawFrame):
-                self._count += 1
-                if self._count <= 5 or self._count % 50 == 0:
-                    logger.debug(f"FrameCounter [{self._name}]: Audio Frame #{self._count} sent to LLM")
-            return await self.push_frame(frame, direction)
-
-    counter = FrameCounter("LLM-Input")
-
-    # Pipeline order: 
-    # 1. Transport Input
-    # 2. StartFrameDetector (triggers bootstrap immediately to avoid deadlock)
-    # 3. LLM Service (handles multimodal auth and processing)
-    # 4. FrameLogger (to verify output)
-    # 5. Transport Output
     pipeline = Pipeline([
         transport.input(),
-        StartFrameDetector(on_pipeline_start),
-        llm,
+        gemini_sdk,
         FrameLogger("From LLM"),
         transport.output(),
-        GlobalErrorMonitor(),
     ])
-
-
-
-
-
-
-
-
-
-
 
     task = PipelineTask(pipeline, params=PipelineParams(
         enable_metrics=True,
         enable_usage_metrics=True,
     ))
 
-    # Run channel joiner in background
     def task_done_callback(t):
         try:
             t.result()
@@ -273,29 +342,23 @@ async def main(host, port, name, channel):
             logger.error(f"BACKGROUND TASK CRASHED: {t.get_name()} - {e}")
             traceback.print_exc()
 
-    jct = asyncio.create_task(join_channel_task(task), name="join_channel_task")
-    mut = asyncio.create_task(monitor_users(mumble_wrapper), name="monitor_users")
-    jct.add_done_callback(task_done_callback)
-    mut.add_done_callback(task_done_callback)
+    asyncio.create_task(join_channel_task(task), name="join_channel_task").add_done_callback(task_done_callback)
+    asyncio.create_task(monitor_users(mumble_wrapper), name="monitor_users").add_done_callback(task_done_callback)
 
     runner = PipelineRunner()
-    
     logger.info("Pipeline Status: Starting runner...")
     try:
         await runner.run(task)
     except Exception as e:
         logger.critical(f"PIPELINE RUNNER FATAL ERROR: {e}")
         traceback.print_exc()
-    finally:
-        logger.info("Runner finished.")
-
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Benny Botman Pipecat Edition")
-    parser.add_argument("--host", default="murmur", help="Mumble server host")
-    parser.add_argument("--port", type=int, default=64738, help="Mumble server port")
+    parser = argparse.ArgumentParser(description="Benny Botman SDK Bypass")
+    parser.add_argument("--host", default="murmur", help="Mumble host")
+    parser.add_argument("--port", type=int, default=64738, help="Mumble port")
     parser.add_argument("--name", default="Benny Botman", help="Bot name")
-    parser.add_argument("--channel", default="AI Test Room", help="Initial channel")
+    parser.add_argument("--channel", default="AI Test Room", help="Channel")
     args = parser.parse_args()
 
     try:

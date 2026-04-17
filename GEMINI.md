@@ -49,3 +49,15 @@ The Gemini bot ("Benny Botman") joins the Mumble channel, unmutes, and establish
 - **Observation**: Only **5 audio frames (~100ms)** were received by Benny's pymumble instance. A 13.8KiB opus clip decoded to 48kHz PCM should produce **~100+ frames (~2+ seconds)**. The loss is 95%+.
 - **Implication**: The Pipecat pipeline is working correctly — it faithfully processes the 5 frames it receives. But ~100ms of audio is far below any VAD threshold and insufficient for Gemini to produce a response.
 - **Next investigation**: Why the tester's `mumble.sound_output.add_sound()` transmissions are not reaching Benny. Possible causes: pymumble send-thread not flushing its buffer before the tester exits, Mumble server packet dropping, or an encoding issue on the tester side.
+
+## Total Interactive Convergence — Definitive Success (2026-04-12)
+
+The interactive lock was achieved by aligning the protocol, signal, and delivery layers into a "Perfect Connection" state.
+
+### Final Breakthrough Stack
+- **Protocol (Uplink)**: Standardized on `v1beta` using a **Single-Call Unified Uplink**. The SDK call must use the explicit `audio=` keyword: `send_realtime_input(audio=...)`.
+- **Explicit Turn-Switch**: Server-side VAD in `v1beta` is unreliable for low-latency turns. The bot sends `audio_stream_end=True` after a 500ms silence flush to force the model from "Listening" to "Generating" state.
+- **Signal Purity**: **Unity Gain (1.0x)** is mandatory. Excessive gain (clipping) disrupts the model's acoustic sensitivity. Resampling must use `audioop.ratecv` with persistent state to eliminate boundary noise.
+- **Guaranteed Output Delivery**: Output frames must bypass the `mumble.is_ready()` check. Transmissions rely directly on the existence of the `sound_output` manager to ensure immediate playback.
+- **Behavioral Mandate**: The `system_instruction` must include a hardcoded mandate for "verbal and immediate" responses to break potential silent "Listening" loops.
+- **Bootstrap**: A text-based priming turn (`"Initial greeting"`) is required at session start to initialize the multimodal context.
