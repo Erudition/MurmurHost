@@ -54,13 +54,7 @@ services:
   echo-bot:
     build: ./bots/echo
     container_name: echo-bot
-    profiles: [ "bots" ]
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
-    healthcheck:
-      test: ["CMD-SHELL", "grep -q echobot.py /proc/1/cmdline"]
-      interval: 1m
-      timeout: 5s
-      retries: 3
     restart: "no"
