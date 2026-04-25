@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir git+https://github.com/azlux/pymumble.git --no-deps
 
 # Copy bot code
+COPY certs ./certs
 COPY . .
 
 CMD ["python", "bot.py"]

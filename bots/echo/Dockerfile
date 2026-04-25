@@ -16,6 +16,7 @@ WORKDIR /bots
 
 RUN pip3 install --no-cache-dir git+https://github.com/azlux/pymumble.git
 
+COPY certs ./certs
 COPY echobot.py .
 
 CMD ["python3", "-u", "echobot.py"]

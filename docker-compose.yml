@@ -10,7 +10,7 @@ services:
       # The config file is baked into the image for Production authority.
       - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
     healthcheck:
-      test: ["CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738"]
+      test: [ "CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,8 +26,6 @@ services:
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./bots/supervisor/supervisor_bot.py:/bots/supervisor_bot.py:ro
-      - ./bots/supervisor/certs:/bots/certs:ro
     restart: unless-stopped
     depends_on:
       murmur:
@@ -43,9 +41,18 @@ services:
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
-    volumes:
-      - ./gemini-bot:/bots:ro
     restart: unless-stopped
+    networks:
+      - podcast-net
+
+  echo-bot:
+    build: ./bots/echo
+    container_name: echo-bot
+    profiles: [ "bots" ]
+    environment:
+      - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
+    restart: "no"
     networks:
       - podcast-net
 

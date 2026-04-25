@@ -22,6 +22,7 @@ RUN pip3 install --no-cache-dir \
 
 RUN pip3 install --no-cache-dir git+https://github.com/azlux/pymumble.git
 
+COPY certs ./certs
 COPY supervisor_bot.py .
 COPY Murmur.ice .
 COPY mumo ./mumo
