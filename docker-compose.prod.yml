@@ -10,7 +10,6 @@ services:
       - NET_ADMIN
     volumes:
       - ./db:/var/lib/murmur
-      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
     ulimits:
       rtprio: 99
       nice: -20
