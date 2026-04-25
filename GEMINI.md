@@ -1,10 +1,4 @@
 
-## Pipecat Migration Constraints
-- **Library**: Use `pipecat-ai` with `[google,silero]` extras for Gemini Live integration.
-- **Protobuf Conflict**: Due to `pymumble` requiring Protobuf 3.x and Pipecat requiring 4.x/5.x, set `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` in the environment.
-- **Pymumble Installation**: Install `pymumble` from git (`https://github.com/azlux/pymumble.git`) using `--no-deps` to bypass metadata-level version conflicts.
-- **Dependencies**: Manually ensure `opuslib` and `libopus-dev` are installed as they are required by `pymumble` but may be skipped during `--no-deps` install.
-- **Service Type**: Use `GeminiLiveLLMService` for native multimodal support.
 
 ## Docker Log Discipline
 - **Never trust stale logs.** After any `docker-compose stop/restart` of Murmur, the bot containers may still show "Up" with old logs from a previous Murmur session. Always identify the current boot boundary before interpreting logs:
@@ -39,18 +33,9 @@
 - **Restart Policies**: Use `restart: unless-stopped` for the **Supervisor** only. Bots managed by the Supervisor (like Echo) must use `restart: "no"` to prevent conflicting restart loops and "zombie" processes.
 - **Mandatory Rebuilds**: These bot containers do NOT use host volume mounts for source code. Any changes to `.py` files **REQUIRE** a `docker compose build <service>` followed by `docker compose up -d` to take effect.
 
-## Total Interactive Convergence — Definitive Success (2026-04-25)
 
-The interactive lock was achieved by aligning the protocol, signal, and delivery layers into a "Perfect Connection" state using the Native Google GenAI SDK (v1beta).
 
-### Final Breakthrough Stack (v15)
-- **Protocol (Single-Session)**: **NEVER RESET THE SESSION**. Resets are prohibited.
-- **Native VAD**: Configured with `AutomaticActivityDetection` (Sensitivity: LOW) to allow Gemini to manage turn transitions natively.
-- **Continuous Uplink**: Sends every 10ms audio frame (including silence) to maintain the WebSocket state machine heartbeat.
-- **Uplink Heartbeat**: Eliminates the "Turn 2 Silence" bug by ensuring the model never loses sync with the client stream.
-- **Interruption Handling**: Monitors `server_content.interrupted` to clear local Mumble buffers instantly upon barge-in.
-- **Signal Integrity**: Unity Gain (1.0x) mandatory in `MumbleTransport`.
-- **Lifecycle Alignment**: `presence_manager` gates the uplink until the bot is undeafened and moved into the target channel.
+
 
 ### Stability Constants
 - **VAD Threshold**: Managed natively by Google (LOW sensitivity).
