@@ -22,7 +22,7 @@ class EchoBot:
 
     def connect(self):
         logger.info(f"EchoBot: Connecting to {self._host}:{self._port} as {self._name}...")
-        self.mumble = pymumble.Mumble(self._host, self._port, user=self._name, certfile=self._certfile, keyfile=self._keyfile)
+        self.mumble = pymumble.Mumble(host=self._host, port=self._port, user=self._name, certfile=self._certfile, keyfile=self._keyfile)
         
         # Set callbacks
         self.mumble.callbacks.set_callback(PYMUMBLE_CLBK_SOUNDRECEIVED, self.sound_received)

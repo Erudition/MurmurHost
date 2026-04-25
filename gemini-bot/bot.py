@@ -199,7 +199,7 @@ class GeminiSDKProcessor:
                 await asyncio.sleep(2)
 
 async def main(host, port, name, channel):
-    mumble = pymumble_py3.Mumble(host, user=name, port=port)
+    mumble = pymumble_py3.Mumble(host=host, user=name, port=port)
     mumble.set_receive_sound(True)
     mumble.start()
     mumble.is_ready()
