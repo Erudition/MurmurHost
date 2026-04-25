@@ -1,7 +1,7 @@
 FROM alpine:latest
 
-# Install Murmur (Mumble Server) and Bash for healthchecks
-RUN apk add --no-cache murmur bash && \
+# Install Murmur (Mumble Server), Bash, and Python3 for reliable healthchecks
+RUN apk add --no-cache murmur bash python3 && \
     mkdir -p /var/lib/murmur && \
     chown -R murmur:murmur /var/lib/murmur
 
