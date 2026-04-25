@@ -1,4 +1,0 @@
-# Bridge file for Coolify/Default compatibility
-# Primary production configuration is in docker-compose.prod.yml
-include:
-  - docker-compose.prod.yml
