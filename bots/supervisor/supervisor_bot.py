@@ -215,7 +215,7 @@ class SupervisorBot:
         rec_should_be_on = self.check_presence_with_timer("Recording", stage_humans, 30)
         
         studio_humans = stage_humans | audience_humans | backstage_humans | hallway_humans
-        pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 600)
+        pod_should_be_on = self.check_presence_with_timer("Benny Botman", studio_humans, 30)
         
         return echo_should_be_on, rec_should_be_on, pod_should_be_on
 

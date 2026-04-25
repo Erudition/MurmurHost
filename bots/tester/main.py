@@ -7,7 +7,7 @@ from pymumble_py3.errors import UnknownChannelError
 
 # --- CONFIG ---
 MUMBLE_HOST = os.getenv("MUMBLE_HOST", "murmur")
-BOT_UNDER_TEST = "Benny Botman"
+BOT_UNDER_TEST = os.getenv("BENNY_NAME", "Benny Botman")
 DRIVER_NAME = "Live Voice Test"
 TEST_ROOM = "AI Test Room"
 CERT = "/bots/certs/tester.pem"
@@ -69,17 +69,17 @@ class MultiTurnDriver:
                 
                 # 2. Check channel
                 if benny['channel_id'] == target_channel_id:
-                    print(f"[System] {BOT_UNDER_TEST} (Session {benny['session']}) is in channel {benny['channel_id']}. Waiting for UNMUTE...")
+                    print(f"[System] {BOT_UNDER_TEST} (Session {benny['session']}) is in channel {benny['channel_id']}. Waiting for UNDEAFEN...")
                     
-                    # 3. Wait for unmute (max 25s)
+                    # 3. Wait for undeafen (max 25s)
                     for wait_tick in range(50):
                         u_state = self.mumble.users.get(benny['session'])
                         if u_state:
-                            # If self_mute is missing, it means the user is in default (unmuted) state
-                            is_muted = u_state.get('self_mute', False)
+                            # SPEC-ALIGNED: Standby mode is Undeafened
+                            is_deafened = u_state.get('self_deafen', False)
                             
-                            if not is_muted:
-                                print(f"[System] {BOT_UNDER_TEST} (Session {benny['session']}) is listening.")
+                            if not is_deafened:
+                                print(f"[System] {BOT_UNDER_TEST} (Session {benny['session']}) is undeafened and listening.")
                                 self.benny_user = u_state
                                 return True
                         
@@ -87,8 +87,8 @@ class MultiTurnDriver:
                             print(f"  [Wait] Syncing state... Session: {benny['session']} (Tick {wait_tick})")
                         await asyncio.sleep(0.5)
                     
-                    print(f"[FAIL] {BOT_UNDER_TEST} joined but timed out waiting for UNMUTE.")
-                    return "UNMUTE_TIMEOUT"
+                    print(f"[FAIL] {BOT_UNDER_TEST} joined but timed out waiting for UNDEAFEN.")
+                    return "UNDEAFEN_TIMEOUT"
             
             if i % 10 == 0:
                 print(f"[System] Still waiting for {BOT_UNDER_TEST}... (Users: {[u['name'] for u in self.mumble.users.values()]})")
@@ -136,7 +136,7 @@ class MultiTurnDriver:
             start_wait = time.time()
             responded = False
             
-            while time.time() - start_wait < 30:
+            while time.time() - start_wait < 15:
                 sid = self.benny_user['session']
                 u = self.mumble.users.get(sid)
                 
@@ -144,6 +144,9 @@ class MultiTurnDriver:
                 is_sc = u.sound.is_sound() if u else False
                 is_sp = u.get('is_speaking', False) if u else False
                 
+                if time.time() - start_wait > 5 and int(time.time() - start_wait) % 5 == 0:
+                    print(f"  [Waiting for Response] User={u['name'] if u else 'N/A'}, Session={sid}, Speaking={is_sp}, Sound={is_sc}")
+
                 if u and (is_sp or is_sc):
                     print(f"[System] {BOT_UNDER_TEST} started speaking (Sound={is_sc}, Speak={is_sp})")
                     # Wait for silence

@@ -9,10 +9,12 @@ services:
       - ./murmur.ini:/etc/murmur.ini
       - ./data:/var/lib/murmur
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "64738"]
+      test: ["CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - podcast-net
 
   supervisor:
     build: ./bots/supervisor
@@ -28,6 +30,14 @@ services:
     depends_on:
       murmur:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "--version"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - podcast-net
+
 
   echo-bot:
     build: ./bots/echo
@@ -40,9 +50,11 @@ services:
       - ./bots/echo/echobot.py:/bots/echobot.py
       - ./bots/echo/certs:/bots/certs
     restart: "no"
+    networks:
+      - podcast-net
 
   benny-bot:
-    build: ./bots/gemini
+    build: ./gemini-bot
     container_name: benny-bot
     profiles: [ "bots" ]
     environment:
@@ -50,10 +62,11 @@ services:
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
-      - ./bots/gemini/pipecat_bot.py:/bots/pipecat_bot.py
-      - ./bots/gemini/mumble_transport.py:/bots/mumble_transport.py
-      - ./bots/gemini/certs:/bots/certs
+      - ./gemini-bot:/bots
     restart: "no"
+
+    networks:
+      - podcast-net
 
   tester:
     build: ./bots/tester
@@ -72,3 +85,10 @@ services:
         condition: service_healthy
       supervisor:
         condition: service_healthy
+    networks:
+      - podcast-net
+
+networks:
+  podcast-net:
+    name: ftpodcastmurmurhost_podcast-net
+    external: true
