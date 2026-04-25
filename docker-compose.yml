@@ -6,7 +6,8 @@ services:
       - "64738:64738/udp"
     restart: unless-stopped
     volumes:
-      - ./murmur.ini:/etc/murmur.ini:ro
+      # THE KEY: We only keep the stateful database here. 
+      # The config file is baked into the image for Production authority.
       - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
     healthcheck:
       test: ["CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738"]
@@ -45,20 +46,6 @@ services:
     volumes:
       - ./gemini-bot:/bots:ro
     restart: unless-stopped
-    networks:
-      - podcast-net
-
-  echo-bot:
-    build: ./bots/echo
-    container_name: echo-bot
-    profiles: [ "bots" ]
-    environment:
-      - MUMBLE_HOST=murmur
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./bots/echo/echobot.py:/bots/echobot.py:ro
-      - ./bots/echo/certs:/bots/certs:ro
-    restart: "no"
     networks:
       - podcast-net
 
