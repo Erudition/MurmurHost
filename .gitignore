@@ -2,7 +2,7 @@
 postgres_data/
 nextcloud_data/
 nextcloud_db/
-docker-compose.override.yml
+
 
 murmur.sqlite.bak
 murmur.sqlite.new

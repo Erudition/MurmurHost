@@ -6,6 +6,7 @@ services:
       - "64738:64738/udp"
     restart: unless-stopped
     volumes:
+      - ./murmur.ini:/etc/murmur.ini
       - ./db:/var/lib/murmur
     healthcheck:
       test: ["CMD-SHELL", "pidof mumble-server > /dev/null"]
@@ -30,6 +31,8 @@ services:
       retries: 3
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./bots/supervisor/supervisor_bot.py:/bots/supervisor_bot.py
+      - ./bots/supervisor/certs:/bots/certs
     restart: unless-stopped
     depends_on:
       murmur:
@@ -74,3 +77,19 @@ services:
       - ./bots/recorder/certs:/bots/certs
     restart: "no"
 
+  tester:
+    build: ./bots/tester
+    container_name: mumble-tester
+    environment:
+      - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./bots/tester/main.py:/bots/main.py
+      - ./bots/tester/clips:/bots/clips
+      - ./bots/tester/certs:/bots/certs:ro
+    entrypoint: ["python3", "/bots/main.py"]
+    depends_on:
+      murmur:
+        condition: service_healthy
+      supervisor:
+        condition: service_healthy

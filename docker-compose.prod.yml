@@ -1,4 +1,75 @@
 services:
   murmur:
+    build: .
+    ports:
+      - "64738:64738"
+      - "64738:64738/udp"
+    restart: unless-stopped
+    volumes:
+      - ./db:/var/lib/murmur
     healthcheck:
-      start_interval: 5s
+      test: ["CMD-SHELL", "pidof mumble-server > /dev/null"]
+      interval: 1m
+      start_period: 1m
+      timeout: 10s
+      retries: 3
+    networks:
+      - default
+
+  supervisor:
+    build: ./bots/supervisor
+    container_name: mumble-supervisor
+    environment:
+      - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q supervisor_bot.py /proc/1/cmdline"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    depends_on:
+      murmur:
+        condition: service_started
+
+  benny-bot:
+    build: ./gemini-bot
+    container_name: benny-bot
+    environment:
+      - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q bot.py /proc/1/cmdline"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+    volumes:
+      - ./gemini-bot:/bots
+    restart: "no"
+
+  echo-bot:
+    build: ./bots/echo
+    container_name: echo-bot
+    environment:
+      - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./bots/echo/echobot.py:/bots/echobot.py
+      - ./bots/echo/certs:/bots/certs
+    restart: "no"
+
+  recording-bot:
+    build: ./bots/recorder
+    container_name: recording-bot
+    environment:
+      - MUMBLE_HOST=murmur
+    volumes:
+      - ./recordings:/bots/recordings
+      - ./bots/recorder/opus_recorder.py:/bots/opus_recorder.py
+      - ./bots/recorder/certs:/bots/certs
+    restart: "no"
