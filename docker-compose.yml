@@ -6,8 +6,8 @@ services:
       - "64738:64738/udp"
     restart: unless-stopped
     volumes:
-      - ./murmur.ini:/etc/murmur.ini
-      - ./data:/var/lib/murmur
+      - ./murmur.ini:/etc/murmur.ini:ro
+      - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
     healthcheck:
       test: ["CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738"]
       interval: 10s
@@ -22,22 +22,31 @@ services:
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./bots/supervisor/supervisor_bot.py:/bots/supervisor_bot.py
-      - ./bots/supervisor/certs:/bots/certs
+      - ./bots/supervisor/supervisor_bot.py:/bots/supervisor_bot.py:ro
+      - ./bots/supervisor/certs:/bots/certs:ro
     restart: unless-stopped
     depends_on:
       murmur:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python3", "--version"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
     networks:
       - podcast-net
 
+  benny-bot:
+    build: ./gemini-bot
+    container_name: benny-bot
+    environment:
+      - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+    volumes:
+      - ./gemini-bot:/bots:ro
+    restart: unless-stopped
+    networks:
+      - podcast-net
 
   echo-bot:
     build: ./bots/echo
@@ -47,48 +56,12 @@ services:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./bots/echo/echobot.py:/bots/echobot.py
-      - ./bots/echo/certs:/bots/certs
+      - ./bots/echo/echobot.py:/bots/echobot.py:ro
+      - ./bots/echo/certs:/bots/certs:ro
     restart: "no"
-    networks:
-      - podcast-net
-
-  benny-bot:
-    build: ./gemini-bot
-    container_name: benny-bot
-    profiles: [ "bots" ]
-    environment:
-      - MUMBLE_HOST=murmur
-      - PYTHONUNBUFFERED=1
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-    volumes:
-      - ./gemini-bot:/bots
-    restart: "no"
-
-    networks:
-      - podcast-net
-
-  tester:
-    build: ./bots/tester
-    container_name: mumble-tester
-    profiles: [ "debug" ]
-    environment:
-      - MUMBLE_HOST=murmur
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./bots/tester/main.py:/bots/main.py
-      - ./bots/tester/clips:/bots/clips
-      - ./bots/tester/certs:/bots/certs
-    entrypoint: [ "python3", "/bots/main.py" ]
-    depends_on:
-      murmur:
-        condition: service_healthy
-      supervisor:
-        condition: service_healthy
     networks:
       - podcast-net
 
 networks:
   podcast-net:
-    name: ftpodcastmurmurhost_podcast-net
-    external: true
+    driver: bridge
