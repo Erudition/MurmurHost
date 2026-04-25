@@ -123,16 +123,21 @@ class GeminiSDKProcessor:
 
     async def _process_input_audio(self):
         await self._ready_event.wait()
-        logger.info("Protocol: Continuous Uplink Enabled.")
+        logger.info("Protocol: Continuous Uplink Enabled (Heartbeat Active).")
+        
+        # 16kHz Mono (2 bytes per sample) -> 20ms = 320 samples = 640 bytes
+        silence_frame = b'\x00' * 640
         
         while self._running:
             try:
-                # We send EVERY frame from Mumble (10ms) to maintain the heartbeat
-                frame = await asyncio.wait_for(self._transport.input().get_audio_frame(), timeout=0.1)
-                if not frame: continue
-                # No RMS threshold: Native VAD handles the gating server-side
-                self._send_queue.put_nowait({"audio": {"data": frame, "mime_type": "audio/pcm"}})
-            except asyncio.TimeoutError: continue
+                # Try to get real audio from Mumble
+                frame = await asyncio.wait_for(self._transport.input().get_audio_frame(), timeout=0.02)
+                if frame:
+                    self._send_queue.put_nowait({"audio": {"data": frame, "mime_type": "audio/pcm"}})
+            except asyncio.TimeoutError:
+                # HEARTBEAT: If no audio, send silence to keep the WebSocket active and VAD primed
+                if self._session_active:
+                    self._send_queue.put_nowait({"audio": {"data": silence_frame, "mime_type": "audio/pcm"}})
             except Exception as e:
                 logger.error(f"Input error: {e}")
                 self._running = False
