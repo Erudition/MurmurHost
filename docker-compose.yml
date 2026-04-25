@@ -74,19 +74,3 @@ services:
       - ./bots/recorder/certs:/bots/certs
     restart: "no"
 
-  tester:
-    build: ./bots/tester
-    container_name: mumble-tester
-    environment:
-      - MUMBLE_HOST=murmur
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./bots/tester/main.py:/bots/main.py
-      - ./bots/tester/clips:/bots/clips
-      - ./bots/tester/certs:/bots/certs:ro
-    entrypoint: ["python3", "/bots/main.py"]
-    depends_on:
-      murmur:
-        condition: service_healthy
-      supervisor:
-        condition: service_healthy
