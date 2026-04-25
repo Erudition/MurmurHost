@@ -15,4 +15,4 @@ EXPOSE 64738 64738/udp
 USER murmur
 
 # Start Murmur in foreground mode
-CMD ["murmurd", "-fg", "-ini", "/etc/murmur.ini"]
+CMD ["mumble-server", "-fg", "-ini", "/etc/murmur.ini"]
