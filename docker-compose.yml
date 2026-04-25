@@ -22,6 +22,11 @@ services:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
@@ -37,6 +42,11 @@ services:
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   echo-bot:
@@ -46,6 +56,11 @@ services:
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     restart: "no"
 
 
