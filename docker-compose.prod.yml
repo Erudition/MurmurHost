@@ -56,8 +56,6 @@ services:
       interval: 1m
       timeout: 5s
       retries: 3
-    volumes:
-      - ./gemini-bot:/bots
     restart: "no"
 
   echo-bot:
@@ -66,9 +64,6 @@ services:
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
-    volumes:
-      - ./bots/echo/echobot.py:/bots/echobot.py
-      - ./bots/echo/certs:/bots/certs
     restart: "no"
 
   recording-bot:
@@ -76,8 +71,4 @@ services:
     container_name: recording-bot
     environment:
       - MUMBLE_HOST=murmur
-    volumes:
-      - ./recordings:/bots/recordings
-      - ./bots/recorder/opus_recorder.py:/bots/opus_recorder.py
-      - ./bots/recorder/certs:/bots/certs
     restart: "no"

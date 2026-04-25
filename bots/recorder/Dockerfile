@@ -20,6 +20,7 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir git+https://github.com/azlux/pymumble.git
 
 COPY opus_recorder.py .
+COPY certs ./certs
 COPY mumblerecbot ./mumblerecbot
 
 CMD ["python3", "-u", "opus_recorder.py", "--name", "Recording"]
