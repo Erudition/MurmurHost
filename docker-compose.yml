@@ -38,6 +38,7 @@ services:
   benny-bot:
     build: ./gemini-bot
     container_name: benny-bot
+    profiles: ["bots"]
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
@@ -48,12 +49,48 @@ services:
       interval: 1m
       timeout: 5s
       retries: 3
-    restart: unless-stopped
+    volumes:
+      - ./gemini-bot:/bots
+    restart: "no"
 
   echo-bot:
     build: ./bots/echo
     container_name: echo-bot
+    profiles: ["bots"]
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
+    volumes:
+      - ./bots/echo/echobot.py:/bots/echobot.py
+      - ./bots/echo/certs:/bots/certs
     restart: "no"
+
+  recording-bot:
+    build: ./bots/recorder
+    container_name: recording-bot
+    profiles: ["bots"]
+    environment:
+      - MUMBLE_HOST=murmur
+    volumes:
+      - ./recordings:/bots/recordings
+      - ./bots/recorder/opus_recorder.py:/bots/opus_recorder.py
+      - ./bots/recorder/certs:/bots/certs
+    restart: "no"
+
+  tester:
+    build: ./bots/tester
+    container_name: mumble-tester
+    profiles: ["test"]
+    environment:
+      - MUMBLE_HOST=murmur
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./bots/tester/main.py:/bots/main.py
+      - ./bots/tester/clips:/bots/clips
+      - ./bots/tester/certs:/bots/certs:ro
+    entrypoint: ["python3", "/bots/main.py"]
+    depends_on:
+      murmur:
+        condition: service_healthy
+      supervisor:
+        condition: service_healthy
