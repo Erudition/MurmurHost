@@ -14,8 +14,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - podcast-net
 
   supervisor:
     build: ./bots/supervisor
@@ -30,8 +28,6 @@ services:
     depends_on:
       murmur:
         condition: service_healthy
-    networks:
-      - podcast-net
 
   benny-bot:
     build: ./gemini-bot
@@ -42,8 +38,6 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     restart: unless-stopped
-    networks:
-      - podcast-net
 
   echo-bot:
     build: ./bots/echo
@@ -53,9 +47,5 @@ services:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
     restart: "no"
-    networks:
-      - podcast-net
 
-networks:
-  podcast-net:
-    driver: bridge
+
