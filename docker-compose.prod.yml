@@ -11,6 +11,7 @@ services:
       test: ["CMD-SHELL", "pidof mumble-server > /dev/null"]
       interval: 1m
       start_period: 1m
+      start_interval: 5s
       timeout: 10s
       retries: 3
     networks:
