@@ -6,6 +6,7 @@ nextcloud_db/
 murmur.sqlite.bak
 murmur.sqlite.new
 *.sqlite
+!murmur.sqlite
 *.sqlite-journal
 
 # Recordings
