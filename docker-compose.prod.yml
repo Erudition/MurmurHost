@@ -10,6 +10,7 @@ services:
       - NET_ADMIN
     volumes:
       - ./db:/var/lib/murmur
+      - ./murmur.ini:/etc/murmur.ini
     ulimits:
       rtprio: 99
       nice: -20
