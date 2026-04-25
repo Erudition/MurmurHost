@@ -39,22 +39,21 @@
 - **Restart Policies**: Use `restart: unless-stopped` for the **Supervisor** only. Bots managed by the Supervisor (like Echo) must use `restart: "no"` to prevent conflicting restart loops and "zombie" processes.
 - **Mandatory Rebuilds**: These bot containers do NOT use host volume mounts for source code. Any changes to `.py` files **REQUIRE** a `docker compose build <service>` followed by `docker compose up -d` to take effect.
 
-## Total Interactive Convergence — Definitive Success (2026-04-17)
+## Total Interactive Convergence — Definitive Success (2026-04-25)
 
 The interactive lock was achieved by aligning the protocol, signal, and delivery layers into a "Perfect Connection" state using the Native Google GenAI SDK (v1beta).
 
-### Final Breakthrough Stack (v14)
-- **Protocol (Single-Session)**: **NEVER RESET THE SESSION**. The Gemini Live API maintains conversational context within a single WebSocket connection. Resetting the session on `turn_complete` causes amnesia and voice inconsistency.
-- **SDK Signatures (Targeted)**:
-  - **Audio Fragments**: Use `session.send_realtime_input(audio=types.Blob(...))`. Do NOT use `media_chunks`.
-  - **Tool Responses**: Use `session.send_tool_response(function_responses=[...])`. The generic `send()` with `tool_response` keyword will crash the session in modern SDK versions.
-  - **Turn Switch**: Use `session.send_realtime_input(audio_stream_end=True)` to signal model processing.
-- **Signal Integrity**: **Unity Gain (1.0x)** mandatory in `MumbleTransport` to prevent VAD clipping.
-- **Phonetic Heartbeat**: Proactively send a 200ms silence block (`b'\x00' * 3200`) after `send_tool_response` to maintain turn sensitivity.
-- **Lifecycle Alignment**: `presence_manager` must gate the audio uplink until the bot is undeafened and moved into the target channel.
+### Final Breakthrough Stack (v15)
+- **Protocol (Single-Session)**: **NEVER RESET THE SESSION**. Resets are prohibited.
+- **Native VAD**: Configured with `AutomaticActivityDetection` (Sensitivity: LOW) to allow Gemini to manage turn transitions natively.
+- **Continuous Uplink**: Sends every 10ms audio frame (including silence) to maintain the WebSocket state machine heartbeat.
+- **Uplink Heartbeat**: Eliminates the "Turn 2 Silence" bug by ensuring the model never loses sync with the client stream.
+- **Interruption Handling**: Monitors `server_content.interrupted` to clear local Mumble buffers instantly upon barge-in.
+- **Signal Integrity**: Unity Gain (1.0x) mandatory in `MumbleTransport`.
+- **Lifecycle Alignment**: `presence_manager` gates the uplink until the bot is undeafened and moved into the target channel.
 
 ### Stability Constants
-- **VAD Watchdog**: 1.0s silence threshold is the optimal balance between turn-switching and phonetic tail preservation for tool-use.
+- **VAD Threshold**: Managed natively by Google (LOW sensitivity).
 - **Model**: `gemini-3.1-flash-live-preview` (multimodal native audio).
 - **Environment**: `PYTHONUNBUFFERED=1` and `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`.
 

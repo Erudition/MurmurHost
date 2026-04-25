@@ -71,29 +71,20 @@ class GeminiSDKProcessor:
             response={"result": result}
         )
         await session.send_tool_response(function_responses=[response])
-        
-        # Maintain Turn Stability with Phonetic Heartbeat
-        await session.send_realtime_input(
-            audio=types.Blob(data=b'\x00' * 3200, mime_type="audio/pcm")
-        )
 
     async def _send_realtime(self, session):
         while self._running and self._session_active:
             try:
                 msg = await asyncio.wait_for(self._send_queue.get(), timeout=0.1)
                 
-                if isinstance(msg, dict):
-                    if "audio" in msg:
-                        # DEFINITIVE v1beta Audio Pattern
-                        await session.send_realtime_input(
-                            audio=types.Blob(
-                                data=msg["audio"]["data"], 
-                                mime_type=msg["audio"]["mime_type"]
-                            )
+                if isinstance(msg, dict) and "audio" in msg:
+                    # DEFINITIVE v1beta Audio Pattern
+                    await session.send_realtime_input(
+                        audio=types.Blob(
+                            data=msg["audio"]["data"], 
+                            mime_type=msg["audio"]["mime_type"]
                         )
-                    elif "audio_stream_end" in msg:
-                        # DEFINITIVE v1beta Turn Switch Pattern
-                        await session.send_realtime_input(audio_stream_end=True)
+                    )
                 
                 self._send_queue.task_done()
             except asyncio.TimeoutError: continue
@@ -112,45 +103,40 @@ class GeminiSDKProcessor:
                     await self._handle_tool_call(session, call)
 
             # 2. Handle Audio Output
-            if message.server_content and message.server_content.model_turn:
-                parts = message.server_content.model_turn.parts
-                for part in parts:
-                    if part.inline_data:
-                        await self._transport.output().write_audio(part.inline_data.data, sample_rate=24000)
+            if message.server_content:
+                # Handle Interruption: Clear buffer immediately
+                if message.server_content.interrupted:
+                    logger.debug("Protocol: Interrupt Signal -> Clearing Output Buffer.")
+                    self._mumble.sound_output.clear_buffer()
+
+                # Process Model Turn Parts
+                if message.server_content.model_turn:
+                    parts = message.server_content.model_turn.parts
+                    for part in parts:
+                        if part.inline_data:
+                            await self._transport.output().write_audio(part.inline_data.data, sample_rate=24000)
             
-            # 3. CONVERSATIONAL CONTINUITY: **Protocol (Single-Session)**: **NEVER RESET THE SESSION**. The Gemini Live API maintains conversational context within a single WebSocket connection. Resetting the session on `turn_complete` causes amnesia and voice inconsistency.
+            # 3. CONVERSATIONAL CONTINUITY: **Protocol (Single-Session)**: **NEVER RESET THE SESSION**.
             if message.server_content and message.server_content.turn_complete:
-                logger.info("Protocol: Turn Complete. Maintaining Session...")
+                logger.debug("Protocol: Turn Complete. Maintaining Session...")
                 continue
 
     async def _process_input_audio(self):
         await self._ready_event.wait()
-        logger.info("Protocol: VAD Uplink Enabled.")
+        logger.info("Protocol: Continuous Uplink Enabled.")
         
         while self._running:
             try:
+                # We send EVERY frame from Mumble (10ms) to maintain the heartbeat
                 frame = await asyncio.wait_for(self._transport.input().get_audio_frame(), timeout=0.1)
                 if not frame: continue
-                volume = audioop.rms(frame, 2)
-                # Sensitivity gate
-                if volume > 3000:
-                    self._send_queue.put_nowait({"audio": {"data": frame, "mime_type": "audio/pcm"}})
-                    self._last_frame_time = time.time()
-                    self._in_turn = True
+                # No RMS threshold: Native VAD handles the gating server-side
+                self._send_queue.put_nowait({"audio": {"data": frame, "mime_type": "audio/pcm"}})
             except asyncio.TimeoutError: continue
             except Exception as e:
                 logger.error(f"Input error: {e}")
                 self._running = False
                 break
-
-    async def _silence_watchdog(self):
-        while self._running:
-            await asyncio.sleep(0.05)
-            # 1.0s prevents phonetic clipping in multi-turn tools
-            if self._in_turn and (time.time() - self._last_frame_time) > 1.0:
-                logger.debug("Protocol: Silence Trigger -> End Stream Segment.")
-                self._send_queue.put_nowait({"audio_stream_end": True})
-                self._in_turn = False
 
     async def _sdk_loop(self):
         tools = [types.Tool(
@@ -174,6 +160,7 @@ class GeminiSDKProcessor:
             ]
         )]
         
+        # DEFINITIVE Interactive Convergence Configuration
         config = types.LiveConnectConfig(
             system_instruction=self._system_instruction,
             tools=tools,
@@ -182,6 +169,13 @@ class GeminiSDKProcessor:
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
                         voice_name="Fenrir"
                     )
+                )
+            ),
+            realtime_input_config=types.RealtimeInputConfig(
+                automatic_activity_detection=types.AutomaticActivityDetection(
+                    # USE LOW SENSITIVITY FOR STABILITY (Matches Phone Assistant blueprint)
+                    start_of_speech_sensitivity="START_SENSITIVITY_LOW",
+                    end_of_speech_sensitivity="END_SENSITIVITY_LOW"
                 )
             ),
             response_modalities=["AUDIO"]
@@ -269,8 +263,7 @@ async def main(host, port, name, channel):
     await asyncio.gather(
         presence_manager(),
         processor._sdk_loop(),
-        processor._process_input_audio(),
-        processor._silence_watchdog()
+        processor._process_input_audio()
     )
 
 if __name__ == "__main__":
