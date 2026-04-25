@@ -5,8 +5,9 @@ RUN apk add --no-cache murmur bash python3 && \
     mkdir -p /var/lib/murmur && \
     chown -R murmur:murmur /var/lib/murmur
 
-# Copy configuration (Baked for production authority)
+# Copy configuration and healthcheck script
 COPY murmur.ini /etc/murmur.ini
+COPY healthcheck.py /usr/local/bin/healthcheck.py
 
 # Metadata
 EXPOSE 64738 64738/udp
