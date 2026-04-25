@@ -18,7 +18,8 @@ class EchoBot:
         self._keyfile = keyfile
         self.mumble = None
         self.is_running = True
-        self.verified_users = set()  # Track users who've spoken long enough for Parrot Mode
+        self.verified_users = set()
+        self.first_sound_times = {} # {username: timestamp}
 
     def connect(self):
         logger.info(f"EchoBot: Connecting to {self._host}:{self._port} as {self._name}...")
@@ -62,9 +63,31 @@ class EchoBot:
             # ECHO: Bounce audio back immediately
             # Width=2 (16-bit), Rate=48000, Channels=1
             self.mumble.sound_output.add_sound(sound.pcm)
+
+            # VERIFICATION Logic
+            if username and username not in self.verified_users:
+                if username not in self.first_sound_times:
+                    self.first_sound_times[username] = time.time()
+                elif time.time() - self.first_sound_times[username] > 3.0:
+                    logger.info(f"EchoBot: Verifying {username}...")
+                    self.verified_users.add(username)
+                    user.send_text_message("Mic Check - I can hear you!")
+                    self.notify_supervisor(username)
             
         except Exception as e:
             logger.error(f"EchoBot Callback Error: {e}")
+
+    def notify_supervisor(self, username):
+        supervisor = None
+        for u in self.mumble.users.values():
+            if u.get('name') == "Supervisor":
+                supervisor = u
+                break
+        
+        if supervisor:
+            supervisor.send_text_message(f"!verify_user {username}")
+        else:
+            logger.warning("EchoBot: Supervisor not found to notify.")
 
     def run(self):
         self.connect()
