@@ -8,7 +8,7 @@ services:
     volumes:
       - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
     healthcheck:
-      test: ["CMD", "sh", "-c", "printf '\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0' | nc -u -w 1 127.0.0.1 64738 | grep -q ."]
+      test: ["CMD", "sh", "-c", "printf '\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0' | nc -u -w 1 127.0.0.1 64738 | wc -c | grep -qv '^0$'"]
       interval: 5m
       start_period: 1m
       start_interval: 5s
