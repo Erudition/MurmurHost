@@ -44,7 +44,7 @@
 The interactive lock was achieved by aligning the protocol, signal, and delivery layers into a "Perfect Connection" state using the Native Google GenAI SDK (v1beta).
 
 ### Final Breakthrough Stack (v14)
-- **Protocol (Multi-Session)**: **MANDATORY SESSION RESET**. Due to a 'Turn 2 Silence' bug in persistent v1beta sessions, the bot MUST disconnect and re-establish the Gemini session immediately upon receiving `turn_complete=True`. This provides a fresh protocol context for every turn.
+- **Protocol (Single-Session)**: **NEVER RESET THE SESSION**. The Gemini Live API maintains conversational context within a single WebSocket connection. Resetting the session on `turn_complete` causes amnesia and voice inconsistency.
 - **SDK Signatures (Targeted)**:
   - **Audio Fragments**: Use `session.send_realtime_input(audio=types.Blob(...))`. Do NOT use `media_chunks`.
   - **Tool Responses**: Use `session.send_tool_response(function_responses=[...])`. The generic `send()` with `tool_response` keyword will crash the session in modern SDK versions.
@@ -57,3 +57,10 @@ The interactive lock was achieved by aligning the protocol, signal, and delivery
 - **VAD Watchdog**: 1.0s silence threshold is the optimal balance between turn-switching and phonetic tail preservation for tool-use.
 - **Model**: `gemini-3.1-flash-live-preview` (multimodal native audio).
 - **Environment**: `PYTHONUNBUFFERED=1` and `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`.
+
+## Local Testing & Git Discipline
+- **Mandatory Local Verification**: DO NOT push code to the remote repository unless it has been verified locally first. This includes:
+    - Syntax validation (e.g., `python3 -m py_compile` or `bash -n`).
+    - Local container test runs for Docker/Compose changes.
+    - Integration testing of external library signatures (e.g., PyMumble) against the local environment.
+- **Zero-Tolerance for Trial-and-Error Commits**: Avoid iterative "fixing in production" commits. All logic must be proven sound before it ever hits the main branch.

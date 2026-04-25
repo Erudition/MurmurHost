@@ -38,7 +38,6 @@ services:
   benny-bot:
     build: ./gemini-bot
     container_name: benny-bot
-    profiles: ["bots"]
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
@@ -56,7 +55,6 @@ services:
   echo-bot:
     build: ./bots/echo
     container_name: echo-bot
-    profiles: ["bots"]
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
@@ -68,7 +66,6 @@ services:
   recording-bot:
     build: ./bots/recorder
     container_name: recording-bot
-    profiles: ["bots"]
     environment:
       - MUMBLE_HOST=murmur
     volumes:
@@ -80,7 +77,6 @@ services:
   tester:
     build: ./bots/tester
     container_name: mumble-tester
-    profiles: ["test"]
     environment:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1

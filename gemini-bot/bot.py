@@ -118,11 +118,10 @@ class GeminiSDKProcessor:
                     if part.inline_data:
                         await self._transport.output().write_audio(part.inline_data.data, sample_rate=24000)
             
-            # 3. SESSION RESET STRATEGY: Necessary for Multimodal Consistency
+            # 3. CONVERSATIONAL CONTINUITY: **Protocol (Single-Session)**: **NEVER RESET THE SESSION**. The Gemini Live API maintains conversational context within a single WebSocket connection. Resetting the session on `turn_complete` causes amnesia and voice inconsistency.
             if message.server_content and message.server_content.turn_complete:
-                logger.info("Protocol: Turn Complete. Resetting Session Lifecycle...")
-                self._session_active = False
-                break
+                logger.info("Protocol: Turn Complete. Maintaining Session...")
+                continue
 
     async def _process_input_audio(self):
         await self._ready_event.wait()
@@ -178,6 +177,13 @@ class GeminiSDKProcessor:
         config = types.LiveConnectConfig(
             system_instruction=self._system_instruction,
             tools=tools,
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                        voice_name="Fenrir"
+                    )
+                )
+            ),
             response_modalities=["AUDIO"]
         )
 
@@ -210,13 +216,33 @@ async def main(host, port, name, channel):
     
     async def presence_manager():
         # Force position in room
+        target_channel = channel
         while mumble.is_alive():
             try:
-                ch = mumble.channels.find_by_name(channel)
-                if ch:
+                try:
+                    ch = mumble.channels.find_by_name(target_channel)
+                except Exception:
+                    ch = None
+
+                if not ch:
+                    # SPEC: Fallback to Audience if AI Test Room is missing
+                    if target_channel == "AI Test Room":
+                        logger.warning("Presence: 'AI Test Room' not found. Falling back to 'Audience 👂' per SPEC.")
+                        target_channel = "Audience 👂"
+                        continue
+                    else:
+                        logger.error(f"Presence: Target channel '{target_channel}' not found.")
+                else:
                     ch.move_in()
+                    # Wait until we are actually in the channel
+                    while mumble.is_alive():
+                        myself = mumble.users.myself
+                        if myself and 'channel_id' in myself and myself['channel_id'] == ch['channel_id']:
+                            break
+                        await asyncio.sleep(0.2)
                     break
-            except: pass
+            except Exception as e:
+                logger.error(f"Presence setup error: {e}")
             await asyncio.sleep(1)
         
         while mumble.is_alive() and not mumble.users.myself: await asyncio.sleep(0.5)
