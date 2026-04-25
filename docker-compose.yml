@@ -6,14 +6,14 @@ services:
       - "64738:64738/udp"
     restart: unless-stopped
     volumes:
-      # THE KEY: We only keep the stateful database here. 
-      # The config file is baked into the image for Production authority.
       - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
     healthcheck:
-      test: [ "CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+    networks:
+      - default
 
   supervisor:
     build: ./bots/supervisor
@@ -23,9 +23,9 @@ services:
       - PYTHONUNBUFFERED=1
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     healthcheck:
-      test: ["CMD", "python3", "-c", "import os; exit(0)"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "grep -q supervisor_bot.py /proc/1/cmdline"]
+      interval: 1m
+      timeout: 5s
       retries: 3
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -43,9 +43,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     healthcheck:
-      test: ["CMD", "python3", "-c", "import os; exit(0)"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "grep -q bot.py /proc/1/cmdline"]
+      interval: 1m
+      timeout: 5s
       retries: 3
     restart: unless-stopped
 
@@ -57,10 +57,8 @@ services:
       - MUMBLE_HOST=murmur
       - PYTHONUNBUFFERED=1
     healthcheck:
-      test: ["CMD", "python3", "-c", "import os; exit(0)"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "grep -q echobot.py /proc/1/cmdline"]
+      interval: 1m
+      timeout: 5s
       retries: 3
     restart: "no"
-
-

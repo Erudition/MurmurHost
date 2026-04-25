@@ -1,14 +1,18 @@
-FROM ubuntu:24.04
+FROM alpine:latest
 
-RUN apt-get update && apt-get install -y mumble-server && \
-    mkdir -p /data && \
-    rm -rf /var/lib/apt/lists/*
+# Install Murmur (Mumble Server) and Bash for healthchecks
+RUN apk add --no-cache murmur bash && \
+    mkdir -p /var/lib/murmur && \
+    chown -R murmur:murmur /var/lib/murmur
 
-COPY murmur.sqlite /data/mumble-server.sqlite
+# Copy configuration (Baked for production authority)
 COPY murmur.ini /etc/murmur.ini
-RUN chown -R mumble-server:mumble-server /data
-ENV MUMBLE_CUSTOM_CONFIG_FILE=/etc/murmur.ini
 
+# Metadata
 EXPOSE 64738 64738/udp
 
-CMD ["/usr/bin/mumble-server", "-fg", "-ini", "/etc/murmur.ini"]
+# Use the non-root 'murmur' user provided by the package
+USER murmur
+
+# Start Murmur in foreground mode
+CMD ["/usr/bin/murmurd", "-fg", "-ini", "/etc/murmur.ini"]
