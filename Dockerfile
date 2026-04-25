@@ -12,8 +12,6 @@ COPY healthcheck.py /usr/local/bin/healthcheck.py
 # Metadata
 EXPOSE 64738 64738/udp
 
-# Use the non-root 'murmur' user provided by the package
-USER murmur
-
 # Start Murmur in foreground mode
+# It will drop privileges to the 'murmur' user internally as per murmur.ini
 CMD ["mumble-server", "-fg", "-ini", "/etc/murmur.ini"]
