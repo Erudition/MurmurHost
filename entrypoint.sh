@@ -1,14 +1,25 @@
 #!/bin/bash
 set -e
 
-# Ensure the database file exists and is owned by the murmur user
-# This handles cases where Docker mounts the file as root
-if [ -f /var/lib/murmur/murmur.sqlite ]; then
-    chown murmur:murmur /var/lib/murmur/murmur.sqlite
+DB_PATH="/var/lib/murmur/murmur.sqlite"
+SEED_PATH="/etc/murmur/murmur.sqlite.seed"
+
+# 1. Clean up if Docker accidentally created a directory
+if [ -d "$DB_PATH" ]; then
+    echo "WARNING: $DB_PATH is a directory (Docker mount artifact). Removing..."
+    rm -rf "$DB_PATH"
 fi
 
-# Ensure the directory is writable
+# 2. Seed the database if missing or empty
+if [ ! -f "$DB_PATH" ] || [ ! -s "$DB_PATH" ]; then
+    echo "INFO: Database missing or empty. Seeding from Git version..."
+    cp "$SEED_PATH" "$DB_PATH"
+fi
+
+# 3. Ensure permissions are correct
+chown murmur:murmur "$DB_PATH"
 chown murmur:murmur /var/lib/murmur
 
 # Execute Murmur
+echo "INFO: Starting Murmur..."
 exec mumble-server -fg -ini /etc/murmur.ini

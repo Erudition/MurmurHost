@@ -6,7 +6,7 @@ services:
       - "64738:64738/udp"
     restart: unless-stopped
     volumes:
-      - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
+      - ./db:/var/lib/murmur
     healthcheck:
       test: ["CMD-SHELL", "pidof mumble-server > /dev/null"]
       interval: 1m
