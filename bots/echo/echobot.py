@@ -71,6 +71,7 @@ if __name__ == "__main__":
     port = int(os.getenv("MUMBLE_PORT", 64738))
     name = os.getenv("BOT_NAME", "EchoBot")
     cert = os.getenv("BOT_CERT", "/bots/certs/echo.pem")
+    key = os.getenv("BOT_KEY", "/bots/certs/echo_key.pem")
     
-    bot = EchoBot(host, port, name, certfile=cert)
+    bot = EchoBot(host, port, name, certfile=cert, keyfile=key)
     bot.run()
