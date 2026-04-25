@@ -18,8 +18,13 @@ class EchoBot:
         self._keyfile = keyfile
         self.mumble = None
         self.is_running = True
+        
+        # Parrot Mode State
         self.verified_users = set()
         self.first_sound_times = {} # {username: timestamp}
+        self.audio_buffers = {}     # username -> bytearray
+        self.last_audio_times = {}  # username -> float
+        self.is_parroting = {}      # username -> bool
 
     def connect(self):
         logger.info(f"EchoBot: Connecting to {self._host}:{self._port} as {self._name}...")
@@ -54,26 +59,39 @@ class EchoBot:
             logger.error(f"EchoBot Move Error: {e}")
 
     def sound_received(self, user, sound):
-        # Entry heartbeat
         try:
-            # DIAGNOSTIC: Log frame receipt from production HEAD
-            username = user.get('name', f"ID:{user['session']}")
-            pcm_len = len(sound.pcm) if hasattr(sound, 'pcm') and sound.pcm else 0
+            username = user.get('name')
+            if not username or username == self._name: return
             
-            # ECHO: Bounce audio back immediately
-            # Width=2 (16-bit), Rate=48000, Channels=1
-            self.mumble.sound_output.add_sound(sound.pcm)
+            # 1. INTERRUPTION: If user speaks while we are parroting, kill the output
+            if self.is_parroting.get(username):
+                logger.debug(f"EchoBot: Interrupted by {username}. Clearing buffer.")
+                self.mumble.sound_output.clear_buffer()
+                self.is_parroting[username] = False
+                if username in self.audio_buffers:
+                    self.audio_buffers[username] = bytearray()
 
-            # VERIFICATION Logic
-            if username and username not in self.verified_users:
+            # 2. MODE HANDLING
+            if username in self.verified_users:
+                # PARROT: Buffer audio
+                if username not in self.audio_buffers:
+                    self.audio_buffers[username] = bytearray()
+                self.audio_buffers[username].extend(sound.pcm)
+                self.last_audio_times[username] = time.time()
+            else:
+                # ECHO: Instant loopback for unverified users
+                self.mumble.sound_output.add_sound(sound.pcm)
+            
+            # 3. VERIFICATION Transition
+            if username not in self.verified_users:
                 if username not in self.first_sound_times:
                     self.first_sound_times[username] = time.time()
                 elif time.time() - self.first_sound_times[username] > 3.0:
                     logger.info(f"EchoBot: Verifying {username}...")
                     self.verified_users.add(username)
-                    user.send_text_message("Mic Check - I can hear you!")
+                    user.send_text_message("Mic Checked - I can hear you! Switching to Parrot Mode.")
                     self.notify_supervisor(username)
-            
+                    
         except Exception as e:
             logger.error(f"EchoBot Callback Error: {e}")
 
@@ -97,9 +115,27 @@ class EchoBot:
         while self.is_running:
             if not self.mumble.is_alive():
                 logger.error("EchoBot: Mumble thread died. Initiating container restart via sys.exit...")
-                # In Docker, we just exit and let the supervisor handle it.
                 sys.exit(1)
-            time.sleep(1)
+            
+            # Parrot Trigger Logic (80ms silence detection)
+            now = time.time()
+            for name in list(self.last_audio_times.keys()):
+                if name in self.audio_buffers and len(self.audio_buffers[name]) > 0:
+                    # If silence threshold reached and not currently marked as parroting
+                    if now - self.last_audio_times[name] > 0.08:
+                        logger.info(f"EchoBot: Parrotting {len(self.audio_buffers[name])} bytes to {name}")
+                        self.mumble.sound_output.add_sound(bytes(self.audio_buffers[name]))
+                        self.audio_buffers[name] = bytearray()
+                        self.is_parroting[name] = True
+            
+            # Check if playback finished (to reset is_parroting)
+            if (hasattr(self.mumble, 'sound_output') and 
+                self.mumble.sound_output and 
+                self.mumble.sound_output.get_buffer_size() == 0):
+                for name in self.is_parroting:
+                    self.is_parroting[name] = False
+
+            time.sleep(0.01) # 10ms resolution for snappy VAD
 
 if __name__ == "__main__":
     host = os.getenv("MUMBLE_HOST", "murmur")
