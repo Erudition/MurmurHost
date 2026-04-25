@@ -8,8 +8,8 @@ services:
     volumes:
       - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
     healthcheck:
-      test: ["CMD", "python3", "/usr/local/bin/healthcheck.py"]
-      interval: 5m
+      test: ["CMD-SHELL", "pgrep mumble-server > /dev/null"]
+      interval: 1m
       start_period: 1m
       start_interval: 5s
       timeout: 10s
