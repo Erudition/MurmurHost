@@ -9,8 +9,9 @@ services:
       - ./murmur.sqlite:/var/lib/murmur/murmur.sqlite
     healthcheck:
       test: ["CMD", "/bin/bash", "-c", "</dev/tcp/127.0.0.1/64738"]
-      interval: 10s
-      start_period: 15s
+      interval: 5m
+      start_period: 1m
+      start_interval: 5s
       timeout: 10s
       retries: 3
     networks:
