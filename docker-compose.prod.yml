@@ -5,8 +5,16 @@ services:
       - "64738:64738"
       - "64738:64738/udp"
     restart: unless-stopped
+    cap_add:
+      - SYS_NICE
+      - NET_ADMIN
     volumes:
       - ./db:/var/lib/murmur
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+    ulimits:
+      rtprio: 99
+      nice: -20
+      memlock: -1
     healthcheck:
       test: ["CMD-SHELL", "pidof mumble-server > /dev/null"]
       interval: 1m
