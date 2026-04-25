@@ -1,4 +1,5 @@
 import asyncio
+import time
 import os
 import pymumble_py3
 import pymumble_py3.constants
@@ -49,7 +50,12 @@ class MumbleInputTransport:
             )
             
             # 4. Push to the internal queue WITHOUT blocking the Mumble thread
-            self._loop.call_soon_threadsafe(self._audio_queue.put_nowait, audio_16k)
+            # Split 20ms (640 bytes) into two 10ms (320 bytes) chunks
+            if len(audio_16k) == 640:
+                self._loop.call_soon_threadsafe(self._audio_queue.put_nowait, audio_16k[:320])
+                self._loop.call_soon_threadsafe(self._audio_queue.put_nowait, audio_16k[320:])
+            else:
+                self._loop.call_soon_threadsafe(self._audio_queue.put_nowait, audio_16k)
 
         except Exception as e:
             logger.error(f"MumbleInput Callback Error: {e}")

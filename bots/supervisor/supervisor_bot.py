@@ -262,8 +262,8 @@ class SupervisorBot:
             data['kick_state_users'] = set()
             return False
 
-        # If Echo, always return based on rules (ignore kick-wait per SPEC Addendum)
-        if bot_name == "Echo":
+        # If Echo or Benny, always return based on rules (ignore kick-wait per SPEC Addendum)
+        if bot_name in ["Echo", "Benny Botman"]:
             data['kick_wait'] = False
             return True
 
