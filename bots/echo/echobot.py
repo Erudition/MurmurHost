@@ -39,6 +39,18 @@ class EchoBot:
         myself = self.mumble.users.myself
         session_id = myself.get('session') if myself else "Unknown"
         logger.info(f"EchoBot: Synchronized (Mumble session: {session_id})")
+        
+        # Move to Mic Check channel
+        mic_check = os.getenv("MIC_CHECK_CHANNEL", "Mic Check 🎧")
+        try:
+            target = self.mumble.channels.find_by_name(mic_check)
+            if target:
+                logger.info(f"EchoBot: Moving to {mic_check}...")
+                self.mumble.users.myself.move_in(target['channel_id'])
+            else:
+                logger.warning(f"EchoBot: Channel '{mic_check}' not found.")
+        except Exception as e:
+            logger.error(f"EchoBot Move Error: {e}")
 
     def sound_received(self, user, sound):
         # Entry heartbeat
