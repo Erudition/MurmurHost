@@ -60,6 +60,11 @@ class EchoBot:
 
     def sound_received(self, user, sound):
         try:
+            # Diagnostic: Log received sound callbacks for debugging delivery
+            try:
+                logger.debug(f"EchoBot: sound_received from {user.get('name')} session={user.get('session')} pcm_len={len(sound.pcm)}")
+            except Exception:
+                logger.debug("EchoBot: sound_received callback (could not read pcm length)")
             username = user.get('name')
             if not username or username == self._name: return
             

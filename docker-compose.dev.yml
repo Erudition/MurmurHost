@@ -46,6 +46,8 @@ services:
       - PYTHONUNBUFFERED=1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+      - TEST_MODE=1
+      - KEEP_ALIVE=1
     healthcheck:
       test: ["CMD-SHELL", "grep -q bot.py /proc/1/cmdline"]
       interval: 1m
