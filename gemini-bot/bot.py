@@ -429,42 +429,30 @@ async def main(host, port, name, channel):
     processor = GeminiSDKProcessor(transport, mumble, "gemini-3.8-live", system_instruction, ready_event)
     
     async def presence_manager():
-        # Force initial position
+        # Force initial position.
+        # Doc (SYSTEM_PROMPT.md): Benny is a listener who sits in Audience.
+        # The AI Test Room only exists while testers run the multi-turn
+        # driver (created on demand under Hallway); in production it never
+        # exists, so Benny falls back to Audience.
         target_channel = channel
-        # SPEC: If the configured channel is AI Test Room, the tester may create it dynamically.
-        # Wait up to 30s for the test driver to create the temporary AI Test Room before falling back.
-        start_wait = time.time()
+        # TEST_MODE: the AI Test Room is created on demand by the tester,
+        # possibly AFTER the supervisor starts this container. Wait for it
+        # (bounded) instead of falling back immediately. Production never
+        # sets TEST_MODE and keeps the deployed move-once behavior.
+        test_room_wait = 120 if (os.environ.get("TEST_MODE") and target_channel == "AI Test Room") else 0
+        waited = 0
         while mumble.is_alive():
             try:
-                # Use in for substring matching to handle emoji variations
-                ch = next((c for c in mumble.channels.values() if target_channel in c.get('name', '')), None)
-                if ch and mumble.users.myself:
+                ch = next((c for c in mumble.channels.values() if c.get('name') == target_channel), None)
+                if not ch:
+                    if target_channel == "AI Test Room" and waited >= test_room_wait:
+                        target_channel = "Audience 👂"
+                        continue
+                else:
                     mumble.users.myself.move_in(ch['channel_id'])
                     break
-
-
-                # Channel not found
-                if target_channel == "AI Test Room":
-                    elapsed = time.time() - start_wait
-                    if elapsed < 30:
-                        if int(elapsed) % 5 == 0:
-                            logger.info(f"Presence: Waiting for '{target_channel}' to be created by tester ({int(elapsed)}s elapsed)")
-                        await asyncio.sleep(1)
-                        continue
-                    else:
-                        logger.info("Presence: AI Test Room not found after 30s; falling back to Mic Check per spec.")
-                        target_channel = "Mic Check"
-                        # reset start_wait so fallback will try to move immediately
-                        start_wait = time.time()
-                        continue
-
-
-                else:
-                    # Non-test channels: try again after a short delay
-                    await asyncio.sleep(1)
-                    continue
-            except Exception:
-                pass
+            except Exception: pass
+            waited += 1
             await asyncio.sleep(1)
         
         # SPEC: Initial State (Muted but Undeafened = Listening)
