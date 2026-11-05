@@ -63,6 +63,7 @@ class GeminiSDKProcessor:
         self._last_disconnect_time = 0
         self._last_frame_time = time.time()
         self._last_speech_time = time.time()
+        self._last_server_event = time.time()
         self._last_turn_tokens = 0
 
     def stop_session(self):
@@ -155,6 +156,9 @@ class GeminiSDKProcessor:
                     if not self._running or not self._session_active:
                         break
                     
+                    # Every server message proves the session is alive
+                    self._last_server_event = time.time()
+
                     # Log non-content messages for deep debugging
                     if not message.server_content:
                         logger.debug(f"Protocol: Received Message -> {type(message)}")
@@ -230,7 +234,10 @@ class GeminiSDKProcessor:
         FRAME_BYTES = 3200
         send_accum = bytearray()
         last_frame_time = time.time()
-        
+        # Wake debounce: a stray 20ms noise blip must not open a Gemini
+        # session. Require ~100ms of sustained loud audio before waking.
+        speech_streak = 0
+
         def queue_audio(data: bytes):
             send_accum.extend(data)
             while len(send_accum) >= FRAME_BYTES:
@@ -247,16 +254,31 @@ class GeminiSDKProcessor:
                     volume = audioop.rms(frame, 2)
                     
                     if volume > 100:
+                        speech_streak += 1
                         # Update speech time to keep session alive
                         self._last_speech_time = time.time()
                         
+                        # Stale-session watchdog: real speech is being uplinked
+                        # but the server has said nothing for 10s -> the session
+                        # is wedged server-side; recycle it and let the next
+                        # loud frame wake a fresh one.
+                        if self._session_active and speech_streak >= 5 and \
+                           (time.time() - self._last_server_event) > 10:
+                            logger.warning("Protocol: Stale session (speech up, server silent). Recycling.")
+                            self.stop_session()
+                            speech_streak = 0
+                        
                         if not self._ready_event.is_set() and not self._session_active and not self._session_starting:
-                            logger.info(f"Presence: Human Speech Detected ({volume}). Waking up API.")
-                            self._session_starting = True
-                            self._ready_event.set()
+                            if speech_streak >= 5:  # ~100ms sustained loud audio
+                                logger.info(f"Presence: Human Speech Detected ({volume}). Waking up API.")
+                                self._session_starting = True
+                                self._ready_event.set()
                     elif volume > 50:
+                        speech_streak = 0
                         # Quiet speech still keeps session alive
                         self._last_speech_time = time.time()
+                    else:
+                        speech_streak = 0
                     
                     if self._session_active:
                         # Flush pre-trigger buffer on first active frame
@@ -435,25 +457,42 @@ async def main(host, port, name, channel):
         # driver (created on demand under Hallway); in production it never
         # exists, so Benny falls back to Audience.
         target_channel = channel
-        # TEST_MODE: the AI Test Room is created on demand by the tester,
-        # possibly AFTER the supervisor starts this container. Wait for it
-        # (bounded) instead of falling back immediately. Production never
-        # sets TEST_MODE and keeps the deployed move-once behavior.
-        test_room_wait = 120 if (os.environ.get("TEST_MODE") and target_channel == "AI Test Room") else 0
-        waited = 0
         while mumble.is_alive():
             try:
                 ch = next((c for c in mumble.channels.values() if c.get('name') == target_channel), None)
                 if not ch:
-                    if target_channel == "AI Test Room" and waited >= test_room_wait:
+                    if target_channel == "AI Test Room":
                         target_channel = "Audience 👂"
                         continue
                 else:
                     mumble.users.myself.move_in(ch['channel_id'])
                     break
             except Exception: pass
-            waited += 1
             await asyncio.sleep(1)
+
+        async def test_room_watcher():
+            # TEST_MODE only: the tester creates the AI Test Room on demand,
+            # possibly AFTER the supervisor started this container. If the
+            # room appears while we idle in Audience, join it. Production
+            # never sets TEST_MODE, so this task is a no-op there.
+            if not (os.environ.get("TEST_MODE") and channel == "AI Test Room"):
+                return
+            for _ in range(120):
+                await asyncio.sleep(1)
+                try:
+                    myself = mumble.users.myself
+                    if not myself:
+                        continue
+                    curr = mumble.channels[myself['channel_id']] if myself['channel_id'] in mumble.channels else None
+                    if curr and "Audience" in curr.get('name', ''):
+                        room = next((c for c in mumble.channels.values() if c.get('name') == "AI Test Room"), None)
+                        if room:
+                            logger.info("Presence: AI Test Room appeared. Joining for test run.")
+                            myself.move_in(room['channel_id'])
+                            return
+                except Exception:
+                    pass
+        asyncio.create_task(test_room_watcher())
         
         # SPEC: Initial State (Muted but Undeafened = Listening)
         while mumble.is_alive() and not mumble.users.myself: await asyncio.sleep(0.5)
@@ -487,6 +526,45 @@ async def main(host, port, name, channel):
                     if aud:
                         logger.info("Presence: Moving Stage -> Audience.")
                         myself.move_in(aud['channel_id'])
+
+            # Home recovery: if our channel vanished (temporary AI Test Room
+            # deleted after a test run) murmur relocates us — observed to
+            # root ("Podcast Server"), sometimes leaving a dead channel id.
+            # Benny's home per the doc is Audience; root is never sanctioned,
+            # so return there instead of idling among ghosts.
+            try:
+                myself = mumble.users.myself
+                if myself and (myself['channel_id'] not in mumble.channels or myself['channel_id'] == 0):
+                    aud = next((c for c in mumble.channels.values() if "Audience" in c.get('name', '')), None)
+                    if aud and myself['channel_id'] != aud['channel_id']:
+                        logger.info("Presence: Home recovery. Returning to Audience.")
+                        myself.move_in(aud['channel_id'])
+            except Exception:
+                pass
+
+            # TEST_MODE: when the tester disconnects, murmur deletes the
+            # temporary AI Test Room (created by the tester) and relocates
+            # whoever is inside — which also churns our connection. Leave
+            # gracefully the moment the room has no humans left.
+            try:
+                myself = mumble.users.myself
+                if myself and os.environ.get("TEST_MODE"):
+                    cid = myself['channel_id']
+                    curr = mumble.channels[cid] if cid in mumble.channels else None
+                    if curr and curr.get('name') == "AI Test Room":
+                        humans_here = [
+                            u['name'] for u in mumble.users.values()
+                            if u['channel_id'] == cid
+                            and u['name'] not in (name, "Supervisor", "Echo")
+                            and not u['name'].startswith("Recording")
+                        ]
+                        if not humans_here:
+                            aud = next((c for c in mumble.channels.values() if "Audience" in c.get('name', '')), None)
+                            if aud:
+                                logger.info("Presence: Test room empty. Returning to Audience.")
+                                myself.move_in(aud['channel_id'])
+            except Exception:
+                pass
 
             # Get current occupancy
             occupied = False
