@@ -24,18 +24,35 @@ def list_mumble_channels(mumble):
     except Exception as e:
         return {"error": str(e)}
 
-def move_to_channel(mumble, channel_name):
-    """Moves the bot to the specified channel by name."""
+def find_channel(mumble, channel_name):
+    """Find a channel by exact name first, then case-insensitive containment
+    (so 'stage' matches '🎙️ Stage 🔴')."""
+    if not channel_name:
+        return None
+    exact = next((c for c in mumble.channels.values() if c.get('name') == channel_name), None)
+    if exact:
+        return exact
+    needle = channel_name.strip().lower()
+    return next((c for c in mumble.channels.values() if needle in c.get('name', '').lower()), None)
+
+def current_channel_name(mumble):
+    """Best-effort name of the channel the bot is currently in."""
     try:
-        target = next((c for c in mumble.channels.values() if c.get('name') == channel_name), None)
-        if target:
-            mumble.users.myself.move_in(target['channel_id'])
-            logger.info(f"Tool Call: move_to_channel -> Moved to '{channel_name}'")
-            return {"status": "success", "channel": channel_name}
-        else:
-            return {"error": f"Channel '{channel_name}' not found."}
-    except Exception as e:
-        return {"error": str(e)}
+        me = mumble.users.myself
+        if me and me.get('channel_id') in mumble.channels:
+            return mumble.channels[me['channel_id']]['name']
+    except Exception:
+        pass
+    return "unknown"
+
+def move_to_channel(mumble, channel_name):
+    """Moves the bot to the specified channel by name. Synchronous quick-path:
+    issues the move; verification is done by the async caller."""
+    target = find_channel(mumble, channel_name)
+    if not target:
+        return None
+    mumble.users.myself.move_in(target['channel_id'])
+    return target
 
 class GeminiSDKProcessor:
     def __init__(self, transport: MumbleTransport, mumble, model_id: str, system_instruction: str, ready_event: asyncio.Event):
@@ -65,6 +82,32 @@ class GeminiSDKProcessor:
         self._last_speech_time = time.time()
         self._last_server_event = time.time()
         self._last_turn_tokens = 0
+        # Live-session context: used to push realtime updates (e.g. channel
+        # changes) into the ongoing Gemini conversation.
+        self._live_session = None
+        self._loop = None
+        self._last_notified_channel = None
+
+    def notify_channel_change(self, channel_name):
+        """Thread-safe: called from pymumble's callback thread when OUR channel
+        changes. Pushes a realtime text update into the live Gemini session so
+        the model always knows where it is."""
+        try:
+            if channel_name == self._last_notified_channel:
+                return
+            self._last_notified_channel = channel_name
+            session = self._live_session
+            loop = self._loop
+            if session is not None and loop is not None and self._session_active:
+                asyncio.run_coroutine_threadsafe(
+                    session.send_realtime_input(
+                        text=f"[System update: You are now in the Mumble channel '{channel_name}'.]"
+                    ),
+                    loop,
+                )
+                logger.info(f"Presence: Notified session of channel change -> '{channel_name}'")
+        except Exception as e:
+            logger.debug(f"Presence: channel-change notify failed: {e}")
 
     def stop_session(self):
         """Signals the session loops to terminate."""
@@ -102,7 +145,37 @@ class GeminiSDKProcessor:
         if call.name == "list_mumble_channels":
             result = list_mumble_channels(self._mumble)
         elif call.name == "move_to_channel":
-            result = move_to_channel(self._mumble, call.args.get("channel_name"))
+            # Issue the move, then VERIFY it landed — pymumble's move_in is
+            # fire-and-forget and can silently no-op; report the truth.
+            try:
+                target = move_to_channel(self._mumble, call.args.get("channel_name"))
+            except Exception as e:
+                target = None
+                logger.error(f"Tool Call: move_to_channel raised: {e}")
+            if target is None:
+                result = {
+                    "error": f"Channel '{call.args.get('channel_name')}' not found.",
+                    "current_channel": current_channel_name(self._mumble),
+                }
+            else:
+                moved = False
+                for _ in range(20):  # up to ~2s for the userstate to confirm
+                    await asyncio.sleep(0.1)
+                    me = self._mumble.users.myself
+                    if me and me.get('channel_id') == target['channel_id']:
+                        moved = True
+                        break
+                if moved:
+                    logger.info(f"Tool Call: move_to_channel -> VERIFIED in '{target['name']}'")
+                    result = {"status": "success", "channel": target['name']}
+                else:
+                    cur = current_channel_name(self._mumble)
+                    logger.warning(f"Tool Call: move_to_channel -> NOT confirmed, still in '{cur}'")
+                    result = {
+                        "status": "failed",
+                        "error": f"Move to '{target['name']}' did not take effect; still in '{cur}'.",
+                        "current_channel": cur,
+                    }
         else:
             result = {"error": "Unknown tool"}
 
@@ -162,6 +235,14 @@ class GeminiSDKProcessor:
                     # Log non-content messages for deep debugging
                     if not message.server_content:
                         logger.debug(f"Protocol: Received Message -> {type(message)}")
+
+                    # Transcript capture (audio-only turns have no text parts)
+                    sc = message.server_content
+                    if sc:
+                        if sc.input_transcription and sc.input_transcription.text:
+                            logger.info(f"Transcript IN : {sc.input_transcription.text}")
+                        if sc.output_transcription and sc.output_transcription.text:
+                            logger.info(f"Transcript OUT: {sc.output_transcription.text}")
 
                     # 1. Handle Tool Calls
                     if message.tool_call:
@@ -342,6 +423,10 @@ class GeminiSDKProcessor:
                     end_of_speech_sensitivity="END_SENSITIVITY_HIGH"
                 )
             ),
+            # Transcript capture: without these the turns are audio-only and
+            # nothing records what either side said.
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
             response_modalities=["AUDIO"]
         )
 
@@ -366,7 +451,18 @@ class GeminiSDKProcessor:
                     logger.info("Protocol: Session READY (Interactive Lock Achieved).")
                     self._session_active = True
                     self._session_starting = False
+                    self._live_session = session
+                    self._loop = asyncio.get_running_loop()
+                    self._last_notified_channel = current_channel_name(self._mumble)
                     self._update_mumble_comment("Interactive Lock")
+
+                    # Seed the model's spatial context: tell it where it is.
+                    try:
+                        await session.send_realtime_input(
+                            text=f"[System: You are currently in the Mumble channel '{self._last_notified_channel}'.]"
+                        )
+                    except Exception as e:
+                        logger.debug(f"Session seed failed: {e}")
                     
                     # SPEC: Sync Mute/Deafen with Session
                     self._mumble.users.myself.unmute()
@@ -383,6 +479,7 @@ class GeminiSDKProcessor:
                     
                     # Deactivate session and cancel remaining task
                     self._session_active = False
+                    self._live_session = None
                     for task in pending:
                         task.cancel()
                         try:
@@ -430,6 +527,20 @@ async def main(host, port, name, channel):
     mumble.set_receive_sound(True)
     mumble.start()
     logger.info(f"Mumble Host: {host} (Identity: {name})")
+
+    # Realtime channel awareness: when OUR userstate changes channel (moved
+    # by the tool, a host, or murmur), notify the live Gemini session. Runs on
+    # pymumble's callback thread; processor handles thread-safety.
+    def _on_user_updated(user, *args):
+        try:
+            if user and user.get('name') == name and 'channel_id' in user:
+                cid = user['channel_id']
+                ch_name = mumble.channels[cid]['name'] if cid in mumble.channels else None
+                if ch_name:
+                    processor.notify_channel_change(ch_name)
+        except Exception:
+            pass
+    mumble.callbacks.set_callback(pymumble_py3.constants.PYMUMBLE_CLBK_USERUPDATED, _on_user_updated)
     await transport.input().start()
     ready_event = asyncio.Event()
     
